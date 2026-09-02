@@ -849,14 +849,14 @@ const VMAX_MPPT=150;     // tensión máxima de entrada del regulador (V)
 // energía diaria cuando se carga el consumo desde la factura. No hay forma de
 // derivar potencia de energía: es una estimación y el usuario puede corregirla.
 const FACTOR_CARGA=0.15;
-const TC_DEFAULT=1400;
+const TC_DEFAULT=1400;   // el default y el fallback de tcChange eran distintos (1400 vs 1200)
 // Fracción del consumo que ocurre con sol, según el perfil del Paso 3. Los
 // porcentajes son los que el propio simulador explica en la ayuda de ese paso.
 const FRAC_DIA={diurno:0.70,equilibrado:0.50,nocturno:0.30};
 // Consumo durante el respaldo, por defecto y según tipo de sistema:
 // en Off Grid las baterías son la única fuente y cubren todo; en Híbrido son
 // respaldo ante cortes, donde sólo se usan las cargas esenciales.
-const RESPALDO_DEF={offgrid:1,hybrid:.5};   // el default y el fallback de tcChange eran distintos (1400 vs 1200)
+const RESPALDO_DEF={offgrid:1,hybrid:.5};
 const MPPT_SZ=[10,20,30,40,60,80,100,120,150];
 const AUTO_OPTS=[
   {v:0,l:'Sin bater\u00edas (On Grid puro)'},
