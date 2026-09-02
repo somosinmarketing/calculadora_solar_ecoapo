@@ -893,6 +893,7 @@ let S={
   tc:1400,markup:20,iva:0, // markup = ex "margen"
   quoteItems:[],
   proposal:'',
+  proposalEdited:false,   // true si el usuario editó el texto a mano
 };
 
 // ── STEPPER RENDER ─────────────────────────────────────────────────────────
@@ -968,6 +969,9 @@ function renderMain(){
   const m=$('main');
   const fns=[null,s1,s2,s3,s4,s5,s6,s7,s8,s9];
   m.innerHTML=(fns[CUR]||s1)();
+  // La tabla de equipos se puebla por JS: hay que repoblarla en CADA render,
+  // no sólo al agregar/borrar, o al volver al Paso 2 aparece vacía.
+  if(CUR===2&&S.consumoMode==='equipos')renderItems();
 }
 
 // ── STEP 1: Proyecto ───────────────────────────────────────────────────────
@@ -1099,7 +1103,7 @@ ${tip('&#128196; ¿Dónde encuentro el kWh/mes?',
 </div>`;
 }
 
-function setConsumoMode(m){S.consumoMode=m;renderMain();if(m==='equipos')setTimeout(renderItems,0);}
+function setConsumoMode(m){S.consumoMode=m;renderMain();}
 
 function facturaInput(val){
   S.facturaKwh=parseFloat(val)||0;
@@ -1550,21 +1554,12 @@ ${batHtml}
 
 // ── STEP 7: Cotización ─────────────────────────────────────────────────────
 function s7(){
-  if(!S.results)S.results=calc();
+  // Recalcular siempre: si el usuario volvió atrás y cambió consumos, el
+  // diseño cacheado quedaría viejo y cotizaríamos otro sistema.
+  S.results=calc();
   const R=S.results;
   const pl=S.priceList;
-  if(R&&!S.quoteItems.length){
-    const items=[{comp:'Panel solar '+R.panWp+' Wp',qty:R.nPan,type:'panel'}];
-    items.push({comp:'Inversor '+fa(R.invSz)+' W',qty:1,type:'inv'});
-    if(R.nBat>0){
-      items.push({comp:'Bater\u00eda '+R.bat.n,qty:R.nBat,type:'bat'});
-      items.push({comp:'Controlador MPPT '+R.mpptSz+' A',qty:1,type:'mppt'});
-    }
-    items.push({comp:'Estructura aluminio',qty:R.nPan||1,type:'estr'});
-    items.push({comp:'Cableado DC + protecc.',qty:1,type:'cab'});
-    items.push({comp:'Mano de obra e instalaci\u00f3n',qty:1,type:'mdo'});
-    S.quoteItems=items.map(i=>({...i,price:'',iva:S.iva,id:uid()}));
-  }
+  syncQuoteWithDesign(R);
   let sumUSD=0,allOk=S.quoteItems.length>0;
   S.quoteItems.forEach(it=>{
     const p=parseFloat(it.price)||0;
@@ -1646,7 +1641,7 @@ ${tip('Cómo usar las listas de precios y el Markup distribuidor',
     <div style="display:flex;gap:7px;flex-wrap:wrap">
     <button class="btn btn-ghost btn-sm" onclick="addQuoteRow()">+ Agregar &iacute;tem</button>
     <button class="btn btn-ghost btn-sm" onclick="triggerAutoFill()" title="Busca precios automáticamente en la lista cargada">&#128269; Auto-precios</button>
-    <button class="btn btn-ghost btn-sm" onclick="S.quoteItems.forEach(i=>delete i._autoMatched);renderMain()" title="Reiniciar cotización" style="color:#e57373">&#8635; Reiniciar</button>
+    <button class="btn btn-ghost btn-sm" onclick="resetQuote()" title="Borra precios y regenera los ítems según el diseño actual" style="color:#e57373">&#8635; Reiniciar</button>
     </div>
   </div>
   <div class="tw"><table class="qt">
@@ -1683,6 +1678,42 @@ ${tip('Cómo usar las listas de precios y el Markup distribuidor',
     </tfoot>
   </table></div>
 </div>`;
+}
+
+// ── QUOTE: SINCRONIZACIÓN CON EL DISEÑO ────────────────────────────────────
+// Mantiene los ítems auto-generados alineados con el dimensionado actual
+// (cantidades y descripciones), preservando precios, IVA, ítems agregados a
+// mano y nombres que el usuario haya editado.
+function syncQuoteWithDesign(R){
+  if(!R)return;
+  const want=[
+    {type:'panel',comp:'Panel solar '+R.panWp+' Wp',qty:R.nPan},
+    {type:'inv',  comp:'Inversor '+fa(R.invSz)+' W',qty:1},
+  ];
+  if(R.nBat>0){
+    want.push({type:'bat', comp:'Bater\u00eda '+R.bat.n,qty:R.nBat});
+    want.push({type:'mppt',comp:'Controlador MPPT '+R.mpptSz+' A',qty:1});
+  }
+  want.push({type:'estr',comp:'Estructura aluminio',qty:R.nPan||1});
+  want.push({type:'cab', comp:'Cableado DC + protecc.',qty:1});
+  want.push({type:'mdo', comp:'Mano de obra e instalaci\u00f3n',qty:1});
+
+  const autoTypes=new Set(want.map(w=>w.type));
+  const extras=S.quoteItems.filter(it=>!autoTypes.has(it.type)&&it.type!=='bat'&&it.type!=='mppt');
+  const out=want.map(w=>{
+    const prev=S.quoteItems.find(it=>it.type===w.type);
+    if(!prev)return{...w,price:'',iva:S.iva,id:uid(),auto:true};
+    // Preservar lo que cargó el usuario; actualizar lo que depende del diseño.
+    return{...prev,type:w.type,qty:w.qty,comp:prev._edited?prev.comp:w.comp,auto:true};
+  });
+  S.quoteItems=out.concat(extras);
+}
+
+function resetQuote(){
+  if(!confirm('\u00bfReiniciar la cotizaci\u00f3n?\n\nSe borran los precios cargados y los \u00edtems vuelven a generarse seg\u00fan el dise\u00f1o actual.'))return;
+  S.quoteItems=[];
+  S.results=calc();
+  renderMain();
 }
 
 // ── QUOTE: TARGETED UPDATES (no renderMain during typing) ──────────────────
@@ -1765,7 +1796,7 @@ function delQuoteRow(id){
 function qComp(inp){
   const id=parseInt(inp.dataset.qid);
   const it=S.quoteItems.find(x=>x.id===id);
-  if(it)it.comp=inp.value;
+  if(it){it.comp=inp.value;it._edited=true;}
 }
 function qQty(inp){
   const id=parseInt(inp.dataset.qid);
@@ -2071,7 +2102,9 @@ OBSERVACIONES TÉCNICAS
 
 ECOAPO · ecoapo.org
 Energía Solar Fotovoltaica · Argentina 2025`;
-  S.proposal=propText;
+  // Sólo pisar el texto si el usuario no lo editó a mano.
+  if(!S.proposalEdited)S.proposal=propText;
+  const shown=S.proposalEdited?S.proposal:propText;
   return `
 <div class="step-hdr">
   <div class="step-eyebrow">Paso 8 &mdash; Propuesta t&eacute;cnica</div>
@@ -2093,9 +2126,11 @@ ${tip('¿Cómo presentar una propuesta profesional?',
     <div style="display:flex;gap:6px">
       <button class="btn btn-ghost btn-sm" onclick="copyProposal()">&#128203; Copiar</button>
       <button class="btn btn-ghost btn-sm" onclick="editProposal()">&#9998; Editar</button>
+      ${S.proposalEdited?'<button class="btn btn-ghost btn-sm" onclick="regenProposal()" title="Descarta tus ediciones y vuelve al texto generado">&#8635; Regenerar</button>':''}
     </div>
   </div>
-  <div class="proposal-preview" id="proposal-text">${escHtml(propText)}</div>
+  ${S.proposalEdited?'<div class="section-note" style="margin-bottom:6px">&#9998; Texto editado a mano: ya no se actualiza solo con los cambios de dise&ntilde;o.</div>':''}
+  <div class="proposal-preview" id="proposal-text">${escHtml(shown)}</div>
 </div>`;
 }
 function copyProposal(){
@@ -2109,8 +2144,17 @@ function editProposal(){
   const el=$('proposal-text');if(!el)return;
   el.contentEditable='true';el.style.border='1px solid var(--g2)';
   el.style.outline='none';el.focus();
-  el.addEventListener('blur',()=>{S.proposal=el.innerText;el.contentEditable='false';el.style.border='';},
-    {once:true});
+  el.addEventListener('blur',()=>{
+    S.proposal=el.innerText;
+    S.proposalEdited=true;
+    el.contentEditable='false';el.style.border='';
+    if(CUR===8)renderMain();
+  },{once:true});
+}
+function regenProposal(){
+  if(!confirm('\u00bfDescartar tus ediciones y regenerar la propuesta autom\u00e1tica?'))return;
+  S.proposalEdited=false;
+  renderMain();
 }
 
 // ── STEP 9: Exportar ───────────────────────────────────────────────────────
@@ -2322,7 +2366,6 @@ function scormComplete(){
   S.items=[];
   renderMain();
   renderStepper();
-  if(S.consumoMode==='equipos')setTimeout(renderItems,50);
 })();
 
 window.onbeforeunload=()=>{
