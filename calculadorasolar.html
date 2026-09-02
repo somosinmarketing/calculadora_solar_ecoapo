@@ -72,11 +72,6 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
   letter-spacing:.08em;margin-bottom:4px}
 .step-title{font-size:20px;font-weight:800;color:var(--g1);line-height:1.2}
 .step-sub{font-size:13px;color:var(--ts);margin-top:4px;line-height:1.5}
-.motivation{background:linear-gradient(135deg,var(--g1),#2a5e30);color:#fff;
-  border-radius:var(--r);padding:11px 14px;font-size:12.5px;margin-bottom:12px;
-  display:none;align-items:center;gap:9px}
-.motivation.show{display:flex}
-.motivation .mi{font-size:18px}
 
 /* ── TIP CARD ─────────────────────────────────────────────────── */
 .tip{background:var(--g3);border:1px solid rgba(140,198,63,.35);border-radius:var(--r);
@@ -868,17 +863,6 @@ const AUTO_OPTS=[
   {v:72,l:'72 horas (3 d\u00edas \u2014 zona aislada)'},
   {v:-1,l:'Personalizado\u2026'},
 ];
-const MOTIV=[
-  "","","&#127775; Perfecto! Registraste los datos del proyecto.",
-  "&#9889; Excelente! Calculaste el consumo del sistema.",
-  "&#128161; Muy bien! Definiste el perfil de consumo.",
-  "&#9728; Genial! Configuraste los par\u00e1metros solares.",
-  "&#128267; Listo! Estableciste la autonom\u00eda del sistema.",
-  "&#128293; Buen\u00edsimo! Ya dimensionaste todos los componentes.",
-  "&#128181; Perfecto! Generaste la cotizaci\u00f3n del sistema.",
-  "&#128196; Excelente! Tu propuesta t\u00e9cnica est\u00e1 lista.",
-  "&#127942; \u00a1Felicitaciones! Completaste tu primera propuesta profesional ECOAPO."
-];
 
 // ── STATE ──────────────────────────────────────────────────────────────────
 let CUR=1,TOTAL=9;
@@ -944,7 +928,6 @@ function goTo(n){
   renderMain();
   renderStepper();
   window.scrollTo({top:0,behavior:'smooth'});
-  if(n>1){setTimeout(()=>{const m=$('motiv-msg');if(m){m.classList.add('show');setTimeout(()=>m.classList.remove('show'),3500);}},400);}
   if(n===TOTAL)$('btn-scorm-done').disabled=false;
 }
 
@@ -998,7 +981,6 @@ function s1(){
   <div class="step-title">&#128206; Identific&aacute; el proyecto</div>
   <div class="step-sub">Estos datos personalizan la propuesta para el cliente.</div>
 </div>
-<div id="motiv-msg" class="motivation"><span class="mi">&#127775;</span>Bienvenido al Simulador ECOAPO. Vamos a dise&ntilde;ar un sistema solar paso a paso.</div>
 ${tip('&#128161; ¿Para qué sirven estos datos?',
   'El nombre del cliente y la ubicación identifican el proyecto y aparecerán en la propuesta técnica y el PDF final. El tipo de proyecto ayuda a contextualizar el diseño.',
   '<b>Tipo de proyecto → perfil de consumo</b><br>Vivienda: uso residencial, consumo nocturno predominante.<br>Comercio: mayor consumo diurno.<br>Bombeo: carga primaria continua durante el día.')}
@@ -1026,7 +1008,6 @@ function s2(){
   <div class="step-title">&#9889; &iquest;Cu&aacute;nta energ&iacute;a se usa?</div>
   <div class="step-sub">Elegí cómo ingresar el consumo: por equipos o desde la factura.</div>
 </div>
-<div id="motiv-msg" class="motivation"><span class="mi">&#127775;</span>${MOTIV[2]}</div>
 <div class="mode-toggle">
   <button class="mode-btn${!isFactura?' active':''}" onclick="setConsumoMode('equipos')">
     &#128295; Modo A &mdash; Por equipos
@@ -1237,7 +1218,6 @@ function s3(){
   <div class="step-title">&#128161; &iquest;Cu&aacute;ndo se usa la energ&iacute;a?</div>
   <div class="step-sub">El perfil determina la proporci&oacute;n de energ&iacute;a que gestionan las bater&iacute;as.</div>
 </div>
-<div id="motiv-msg" class="motivation"><span class="mi">&#9889;</span>${MOTIV[3]}</div>
 ${tip('¿Cómo influye el perfil de consumo?',
   'El perfil define qué porción del consumo ocurre mientras el sol brilla (diurno) versus cuando no hay generación (nocturno).',
   `<b>Diurno</b>: ~70% del consumo entre 8:00 y 18:00. Paneles alimentan cargas directamente → banco de baterías más pequeño posible.<br><br>
@@ -1267,7 +1247,6 @@ function s4(){
   <div class="step-title">&#9728; Recurso solar disponible</div>
   <div class="step-sub">Las HSP determinan cu&aacute;nta energ&iacute;a generan los paneles en esa zona.</div>
 </div>
-<div id="motiv-msg" class="motivation"><span class="mi">&#128161;</span>${MOTIV[4]}</div>
 ${tip('¿Qué son las Horas Solares Pico (HSP)?',
   'Una HSP equivale a 1 hora de irradiancia máxima de 1.000 W/m². Normaliza la radiación variable del día a un número comparable entre zonas.',
   `<b>Fórmula de generación:</b><br>
@@ -1317,7 +1296,6 @@ function s5(){
   <div class="step-title">&#128267; Dise&ntilde;o del sistema</div>
   <div class="step-sub">Define el tipo de instalaci&oacute;n y las horas de reserva energ&eacute;tica.</div>
 </div>
-<div id="motiv-msg" class="motivation"><span class="mi">&#9728;</span>${MOTIV[5]}</div>
 ${tip('¿Qué es la autonomía y cómo elegirla?',
   'Autonomía = horas que el sistema funciona con energía almacenada, sin generación solar.',
   `<b>Criterios de selección:</b><br>
@@ -1558,7 +1536,6 @@ E (Wh) = ${R.nBat} × ${R.bat.Ah} Ah × ${R.bat.V} V = ${fa(R.bankWh)} Wh</div>
   <div class="step-title">&#128202; Tu sistema: <em>${sys}</em></div>
   <div class="step-sub">Componentes calculados seg&uacute;n datos ingresados. PR = ${R.PR} (factor de rendimiento global).</div>
 </div>
-<div id="motiv-msg" class="motivation show"><span class="mi">&#128293;</span>${MOTIV[6]}</div>
 ${tip('Trazabilidad de fórmulas — cómo se calculó cada componente',
   `<b>PANELES:</b><br>
   Wp_necesarios = Wh_día ÷ (PR × HSP)<br>
@@ -1663,7 +1640,6 @@ function s7(){
   <div class="step-title">&#128181; Precio del sistema</div>
   <div class="step-sub">Carg&aacute; precios y obten&eacute; la cotizaci&oacute;n en USD y ARS.</div>
 </div>
-<div id="motiv-msg" class="motivation"><span class="mi">&#128267;</span>${MOTIV[7]}</div>
 ${tip('Cómo usar las listas de precios y el Markup distribuidor',
   'Cargá la lista de precios de tu proveedor (CSV, XLSX, TSV o TXT). El sistema detecta las columnas automáticamente y completa los precios que puede.',
   `<b>Markup distribuidor:</b> porcentaje que se agrega al costo del proveedor para obtener el precio de venta.<br>
@@ -2192,7 +2168,6 @@ Energía Solar Fotovoltaica · Argentina 2025`;
   <div class="step-title">&#128196; Propuesta lista para el cliente</div>
   <div class="step-sub">Propuesta profesional generada autom&aacute;ticamente. Pod&eacute;s editarla antes de entregar.</div>
 </div>
-<div id="motiv-msg" class="motivation show"><span class="mi">&#128196;</span>${MOTIV[8]}</div>
 ${tip('¿Cómo presentar una propuesta profesional?',
   'Una buena propuesta técnica transmite confianza, claridad y profesionalismo.',
   `<b>Elementos clave:</b><br>
@@ -2246,7 +2221,6 @@ function s9(){
   <div class="step-title">&#127942; Descarg&aacute; tu propuesta</div>
   <div class="step-sub">Generá el PDF profesional para entregar al cliente.</div>
 </div>
-<div id="motiv-msg" class="motivation show"><span class="mi">&#127942;</span>${MOTIV[9]}</div>
 <div class="card" style="text-align:center;padding:28px">
   <div style="font-size:48px;margin-bottom:12px">&#128203;</div>
   <div style="font-size:16px;font-weight:700;color:var(--g1);margin-bottom:6px">
@@ -2491,8 +2465,6 @@ function scormComplete(){
   sc2('LMSCommit',[]);
   $('btn-scorm-done').disabled=true;
   $('btn-scorm-done').textContent='\u2713 Completado';
-  const m=$('motiv-msg');
-  if(m){m.innerHTML='<span class="mi">&#127942;</span>'+MOTIV[10];m.classList.add('show');}
 }
 
 // ── INIT ───────────────────────────────────────────────────────────────────
