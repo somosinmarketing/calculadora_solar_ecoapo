@@ -33,6 +33,35 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
   border-radius:5px;font-size:11px;font-weight:700;cursor:pointer}
 #btn-scorm-done:disabled{background:#888;color:#aaa;cursor:not-allowed}
 #scorm-time{font-size:10px;color:rgba(255,255,255,.5)}
+#btn-params{background:transparent;color:rgba(255,255,255,.75);border:1px solid rgba(255,255,255,.3);
+  padding:5px 10px;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit}
+#btn-params:hover{background:rgba(255,255,255,.12);color:#fff}
+#btn-params.mod{border-color:var(--am);color:var(--am)}
+#params-ov{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:none;
+  overflow-y:auto;padding:20px 12px}
+#params-ov.open{display:block}
+#params-box{background:#fff;max-width:660px;margin:0 auto;border-radius:var(--r);
+  box-shadow:0 12px 40px rgba(0,0,0,.3)}
+#params-hd{position:sticky;top:0;background:var(--g1);color:#fff;padding:13px 16px;
+  border-radius:var(--r) var(--r) 0 0;display:flex;align-items:center;justify-content:space-between;gap:10px}
+#params-hd h3{font-size:14px;font-weight:700;margin:0}
+#params-hd p{font-size:11px;color:var(--g2);margin:2px 0 0}
+#params-close{background:transparent;border:1px solid rgba(255,255,255,.35);color:#fff;
+  width:28px;height:28px;border-radius:5px;cursor:pointer;font-size:15px;line-height:1;flex-shrink:0}
+#params-body{padding:14px 16px 16px}
+.pgrp{margin-bottom:16px}
+.pgrp h4{font-size:11px;font-weight:700;color:var(--g1);text-transform:uppercase;
+  letter-spacing:.06em;margin:0 0 8px;padding-bottom:5px;border-bottom:1px solid var(--bd)}
+.prow{display:grid;grid-template-columns:1fr 92px;gap:10px;align-items:start;padding:7px 0}
+.prow-lbl{font-size:12px;font-weight:600;color:var(--tx)}
+.prow-help{font-size:11px;color:var(--ts);line-height:1.45;margin-top:2px}
+.prow input{width:100%;padding:6px 8px;border:1px solid #ccc;border-radius:6px;
+  font-size:13px;font-family:inherit;text-align:right}
+.prow input.mod{border-color:var(--am);background:#fffaf0;font-weight:700}
+.prow-def{font-size:10px;color:var(--ts);text-align:right;margin-top:3px}
+#params-ft{display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;
+  padding:12px 16px;border-top:1px solid var(--bd);position:sticky;bottom:0;background:#fff;
+  border-radius:0 0 var(--r) var(--r)}
 #btn-reset{background:transparent;color:rgba(255,255,255,.75);border:1px solid rgba(255,255,255,.3);
   padding:5px 10px;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit}
 #btn-reset:hover{background:rgba(255,255,255,.12);color:#fff}
@@ -345,6 +374,7 @@ input,select,textarea{font-size:max(16px,1em)}
   </div>
   <div style="display:flex;align-items:center;gap:10px">
     <span id="scorm-time">0:00</span>
+    <button id="btn-params" onclick="openParams()" title="Criterios de cálculo del proyecto">&#9881; Criterios</button>
     <button id="btn-reset" onclick="resetAll()" title="Borrar todo y empezar un proyecto nuevo">Nuevo</button>
     <button id="btn-scorm-done" disabled onclick="scormComplete()">&#10003; Marcar completo</button>
   </div>
@@ -377,6 +407,24 @@ input,select,textarea{font-size:max(16px,1em)}
   <button class="btn btn-ghost btn-sm" id="btn-prev" onclick="navStep(-1)" disabled>&#8592; Anterior</button>
   <span id="step-counter">Paso 1 de 9</span>
   <button class="btn btn-g" id="btn-next" onclick="navStep(1)">Siguiente &#8594;</button>
+</div>
+
+<!-- ── PANEL DE CRITERIOS ─────────────────────────────────────── -->
+<div id="params-ov" onclick="if(event.target===this)closeParams()">
+  <div id="params-box">
+    <div id="params-hd">
+      <div>
+        <h3>&#9881; Criterios de c&aacute;lculo</h3>
+        <p>Los define el t&eacute;cnico que arma el presupuesto</p>
+      </div>
+      <button id="params-close" onclick="closeParams()" title="Cerrar">&#10005;</button>
+    </div>
+    <div id="params-body"></div>
+    <div id="params-ft">
+      <button class="btn btn-ghost btn-sm" onclick="resetParams()">&#8635; Restaurar valores de referencia</button>
+      <button class="btn btn-g btn-sm" onclick="closeParams()">Aplicar y cerrar</button>
+    </div>
+  </div>
 </div>
 
 <!-- Librerías inline (sin CDN, funciona offline) -->
@@ -845,35 +893,61 @@ const REGIONS=[
   {id:"norte",n:"Norte extremo",z:"Jujuy / Salta / Catamarca",hsp:5.8,hspMin:4.2},
 ];
 const INV_SZ=[600,1000,1500,2000,3000,4000,5000,6000,8000,10000,12000,15000,20000];
-// Constantes de diseño. Los textos de ayuda las interpolan en vez de repetir
-// el número a mano, que era como el tip decía 0,95 mientras el cálculo usaba 0,94.
-const ETA_INV=0.94;      // rendimiento típico del inversor off-grid (IEC 62040-3)
-const SURGE=2;           // sobrecarga de arranque que tolera un inversor (~2x nominal)
-const INV_SEC=1.25;      // factor de seguridad sobre la carga nominal
-const VMAX_MPPT=150;     // tensión máxima de entrada del regulador (V)
-// Factor de carga usado para estimar la potencia simultánea a partir de la
-// energía diaria cuando se carga el consumo desde la factura. No hay forma de
-// derivar potencia de energía: es una estimación y el usuario puede corregirla.
-const FACTOR_CARGA=0.15;
 const TC_DEFAULT=1400;   // el default y el fallback de tcChange eran distintos (1400 vs 1200)
-// Fracción del consumo que ocurre con sol, según el perfil del Paso 3. Los
-// porcentajes son los que el propio simulador explica en la ayuda de ese paso.
-const FRAC_DIA={diurno:0.70,equilibrado:0.50,nocturno:0.30};
 // Consumo durante el respaldo, por defecto y según tipo de sistema:
 // en Off Grid las baterías son la única fuente y cubren todo; en Híbrido son
 // respaldo ante cortes, donde sólo se usan las cargas esenciales.
 const RESPALDO_DEF={offgrid:1,hybrid:.5};
-// Superficie: un módulo cristalino actual ronda los 200 W por m² (eficiencia
-// ~20%), así que el área sale de la potencia. El factor de techo agrega la
-// separación entre filas y los pasillos de mantenimiento.
-const W_POR_M2=200;
-const FACTOR_TECHO=1.3;
-// Retorno de inversión. El sistema NO ahorra el 100% de lo que se paga por
-// cada kWh: los cargos fijos y buena parte de los impuestos se siguen pagando
-// aunque generes tu propia energía. Sin esta corrección el repago da la mitad
-// de lo que reporta el mercado y la herramienta prometería de más.
-const PRECIO_KWH_DEF=190;      // ARS por kWh, all-in. REVISAR cada 3 meses.
-const PORCION_EVITABLE_DEF=60; // % de la factura realmente evitable
+
+// ── PARÁMETROS DE DISEÑO ───────────────────────────────────────────────────
+// Todos los criterios que antes estaban fijos en el código. Los define el
+// técnico que hace el presupuesto, no la herramienta: dependen del equipo que
+// se cotiza, del tipo de montaje y de la política comercial. Estos son sólo
+// valores de arranque, editables desde el botón "Criterios" de la barra
+// superior y guardados con el proyecto.
+const PARAMS_DEF={
+  prBat:0.75,        // Performance Ratio con baterías
+  prGrid:0.80,       // Performance Ratio On Grid
+  etaInv:94,         // % rendimiento del inversor (IEC 62040-3)
+  etaLitio:96,       // % round-trip LiFePO4
+  etaPlomo:85,       // % round-trip AGM / Gel
+  invSec:1.25,       // factor de seguridad sobre la carga nominal
+  surge:2,           // sobrecarga de arranque que tolera el inversor
+  vmaxMppt:150,      // V máx. de entrada del regulador
+  wPorM2:200,        // W por m² de módulo (eficiencia ~20%)
+  factorTecho:1.3,   // superficie de techo sobre área de módulos
+  factorCarga:15,    // % factor de carga para estimar potencia desde la factura
+  fracDiurno:70,     // % del consumo con sol, perfil diurno
+  fracEquilibrado:50,
+  fracNocturno:30,
+  precioKwh:190,     // ARS/kWh all-in. REVISAR cada 3 meses.
+  porcionEvitable:60,// % de la factura realmente evitable
+};
+const PARAMS_INFO={
+  prBat:['Performance Ratio con baterías','Pérdidas globales del sistema con almacenamiento. Típico 0,70–0,78.'],
+  prGrid:['Performance Ratio On Grid','Sin las pérdidas del banco. Típico 0,78–0,82.'],
+  etaInv:['Rendimiento del inversor (%)','Del equipo que estés cotizando. Típico 92–96.'],
+  etaLitio:['Round-trip LiFePO4 (%)','Eficiencia de carga y descarga. Típico 95–97.'],
+  etaPlomo:['Round-trip AGM / Gel (%)','Típico 80–88.'],
+  invSec:['Factor de seguridad del inversor','Margen sobre la carga nominal. Típico 1,20–1,30.'],
+  surge:['Sobrecarga de arranque tolerada','Cuántas veces la nominal aguanta el inversor en el arranque. Típico 2–3.'],
+  vmaxMppt:['Tensión máx. de entrada MPPT (V)','Del regulador elegido. Limita cuántos paneles van en serie.'],
+  wPorM2:['W por m² de módulo','Depende de la eficiencia del panel. Típico 190–230.'],
+  factorTecho:['Factor de superficie de techo','1,0 coplanar sobre techo inclinado; 1,3–2,0 con estructura y separación entre filas.'],
+  factorCarga:['Factor de carga (%)','Para estimar potencia simultánea desde la factura. Menor factor, mayor potencia estimada.'],
+  fracDiurno:['Consumo diurno — perfil diurno (%)','Qué parte del consumo ocurre con sol.'],
+  fracEquilibrado:['Consumo diurno — perfil equilibrado (%)',''],
+  fracNocturno:['Consumo diurno — perfil nocturno (%)',''],
+  precioKwh:['Precio del kWh (ARS)','Total de la factura dividido los kWh. Revisar cada 3 meses.'],
+  porcionEvitable:['Porción evitable de la factura (%)','Los cargos fijos e impuestos se siguen pagando aunque generes.'],
+};
+const PARAMS_GRUPOS=[
+  ['Generación',['prBat','prGrid','wPorM2','factorTecho']],
+  ['Inversor y regulador',['invSec','surge','etaInv','vmaxMppt']],
+  ['Baterías',['etaLitio','etaPlomo']],
+  ['Consumo',['fracDiurno','fracEquilibrado','fracNocturno','factorCarga']],
+  ['Retorno de inversión',['precioKwh','porcionEvitable']],
+];
 const MPPT_SZ=[10,20,30,40,60,80,100,120,150];
 const AUTO_OPTS=[
   {v:0,l:'Sin bater\u00edas (On Grid puro)'},
@@ -913,8 +987,7 @@ let S={
   sysType:'offgrid',
   inyecta:null,      // null = sin definir. Bloquea el dimensionado a propósito.
   coberturaObj:100,  // % del consumo que cubre el FV; el resto lo aporta la red
-  precioKwh:PRECIO_KWH_DEF,
-  porcionEvitable:PORCION_EVITABLE_DEF,
+  params:{...PARAMS_DEF},   // criterios de diseño, editables por el técnico
   respaldo:'auto',   // 'auto' | 'esenciales' | número 0-100
   voltOv:'auto',
   results:null,
@@ -1109,7 +1182,7 @@ ${tip('&#128196; ¿Dónde encuentro el kWh/mes?',
   <div class="fld">
     <label>Potencia simult&aacute;nea estimada (W)</label>
     <input id="factura-w" type="number" min="0" step="100" value="${S.facturaW||''}"
-      placeholder="${S.facturaKwh>0?'Autom\u00e1tico: '+fa((S.facturaKwh*1000/30/24)/FACTOR_CARGA)+' W':'Autom\u00e1tico'}"
+      placeholder="${S.facturaKwh>0?'Autom\u00e1tico: '+fa((S.facturaKwh*1000/30/24)/(S.params.factorCarga/100))+' W':'Autom\u00e1tico'}"
       oninput="S.facturaW=parseFloat(this.value)||0">
     <div class="section-note">Es lo que define el tama&ntilde;o del inversor. La factura informa
       <b>energ&iacute;a</b>, no <b>potencia</b>: dej&aacute;lo vac&iacute;o para estimarlo, o carg&aacute; la
@@ -1357,6 +1430,11 @@ function hspCritChange(sel){
 }
 
 // ── STEP 5: Autonomía ──────────────────────────────────────────────────────
+// Fracción diurna del perfil activo, según los criterios cargados.
+function fracDiaActual(){
+  const F={diurno:S.params.fracDiurno,equilibrado:S.params.fracEquilibrado,nocturno:S.params.fracNocturno};
+  return (F[S.profile]!==undefined?F[S.profile]:50)/100;
+}
 function s5(){
   const autoVal=S.autonomy;
   const isCustom=autoVal===-1;
@@ -1402,7 +1480,7 @@ ${S.sysType!=='offgrid'?`
   ${S.inyecta===false&&S.sysType==='ongrid'?`<div class="section-note">
     Sin inyecci&oacute;n s&oacute;lo se aprovecha lo que se consume mientras hay sol: los paneles se
     dimensionan sobre el consumo diurno seg&uacute;n el perfil del Paso 3
-    (<b>${S.profile}</b>, ${Math.round((FRAC_DIA[S.profile]||.5)*100)}% diurno). Lo que se genera de m&aacute;s se pierde.</div>`:''}
+    (<b>${S.profile}</b>, ${Math.round(fracDiaActual()*100)}% diurno). Lo que se genera de m&aacute;s se pierde.</div>`:''}
   ${S.inyecta===false&&S.sysType==='hybrid'?'<div class="section-note">En h&iacute;brido el excedente carga las bater&iacute;as en vez de perderse, as&iacute; que los paneles se siguen dimensionando para cubrir las 24 h.</div>':''}
   ${S.inyecta===true?'<div class="section-note">Con balance neto el excedente del d&iacute;a compensa el consumo nocturno: los paneles cubren las 24 h.</div>':''}
   <div class="fld" style="max-width:340px;margin-top:12px">
@@ -1483,6 +1561,7 @@ function respChange(sel){
 // Formulas: IEC 61724 / ASHRAE 93 / PV*SOL methodology
 function calc(){
   // 1. Determine daily energy consumption (Wh/day)
+  const P=S.params;   // criterios definidos por el técnico
   let totWh=0,totW=0,totWpk=0,whEsencial=0;
   if(S.consumoMode==='factura'){
     if(!S.facturaKwh||S.facturaKwh<=0)return null;
@@ -1491,8 +1570,8 @@ function calc(){
     // un factor de carga, y el usuario puede sobrescribirla en el Paso 2:
     // dimensionar el inversor sobre un número inventado dejaba sistemas de
     // 350 kWh/mes con inversores de 2 kW.
-    totW=S.facturaW>0?S.facturaW:(totWh/24)/FACTOR_CARGA;
-    totWpk=totW*SURGE;
+    totW=S.facturaW>0?S.facturaW:(totWh/24)/(P.factorCarga/100);
+    totWpk=totW*P.surge;
   } else {
     if(!S.items.length)return null;
     S.items.forEach(it=>{
@@ -1545,13 +1624,14 @@ function calc(){
   //   Pérd. cableado DC: ~2% | Temperatura: ~5% | Suciedad: ~3%
   //   Efic. MPPT: ~2%        | Discordancia: ~1% | Efic. inversor: ~5%
   //   Total pérdidas: ~18–22% → PR = 0,75–0,80
-  const PR=S.sysType==='ongrid'?0.80:0.75;
+  const PR=S.sysType==='ongrid'?P.prGrid:P.prBat;
   // Cuánto del consumo tiene que cubrir el generador FV.
   // Con inyección (o con baterías que absorban el excedente) hay que producir
   // durante las horas de sol la energía de las 24 h. Sin inyección, en cambio,
   // lo que se genera de más se pierde: sólo sirve el consumo que ocurre en
   // simultáneo con la generación, así que se dimensiona sobre la parte diurna.
-  const fracDia=FRAC_DIA[S.profile]||0.50;
+  const FRAC={diurno:P.fracDiurno,equilibrado:P.fracEquilibrado,nocturno:P.fracNocturno};
+  const fracDia=(FRAC[S.profile]!==undefined?FRAC[S.profile]:50)/100;
   const sinInyeccion=S.sysType==='ongrid'&&S.inyecta===false;
   // Con red disponible el sistema no tiene por qué cubrir todo el consumo: se
   // puede dimensionar para una fracción y tomar el resto de la red. En Off Grid
@@ -1590,9 +1670,10 @@ function calc(){
   const whRespDia=totWh*fracResp;
 
   let batS=0,batP=0,nBat=0,bankAh=0,bankWh=0,bankKwh=0,whStore=0,batOver=0;
-  const ETA_bat=bat.chem==='LiFePO4'?0.96:0.85;
+  const ETA_bat=(bat.chem==='LiFePO4'?P.etaLitio:P.etaPlomo)/100;
+  const ETA_inv=P.etaInv/100;
   if(usaBat&&bat.V<=volt){
-    whStore=(whRespDia/24*auto)/(bat.DoD*ETA_bat*ETA_INV);
+    whStore=(whRespDia/24*auto)/(bat.DoD*ETA_bat*ETA_inv);
     const ahNeed=whStore/volt;
     batS=Math.max(1,Math.round(volt/bat.V));
     batP=Math.ceil(ahNeed/bat.Ah);
@@ -1620,12 +1701,12 @@ function calc(){
     invReq=Math.max(totWpInst*0.9,500);
     invCrit='90% de la potencia FV instalada (relaci\u00f3n DC/AC t\u00edpica 1,1\u20131,2)';
   } else {
-    const porCarga=Math.max(totW,500)*INV_SEC;
-    const porPico=totWpk/SURGE;
+    const porCarga=Math.max(totW,500)*P.invSec;
+    const porPico=totWpk/P.surge;
     invReq=Math.max(porCarga,porPico,500);
     invCrit=porPico>porCarga
-      ?'limitado por el pico de arranque ('+fa(Math.round(totWpk))+' W \u00f7 '+SURGE+' de sobrecarga)'
-      :'limitado por la carga nominal ('+fa(Math.round(totW))+' W \u00d7 '+INV_SEC+')';
+      ?'limitado por el pico de arranque ('+fa(Math.round(totWpk))+' W \u00f7 '+P.surge+' de sobrecarga)'
+      :'limitado por la carga nominal ('+fa(Math.round(totW))+' W \u00d7 '+P.invSec+')';
   }
   // Antes, si el equipo necesario superaba la tabla se devolvía el mayor valor
   // en silencio: pedías 182 A y te mostraba 150 A como si estuviera bien.
@@ -1638,7 +1719,7 @@ function calc(){
   // Corriente de salida MPPT (hacia baterías):
   //   I_mppt_out = P_paneles / V_sistema × factor de seguridad
   //   Esta es la corriente que el regulador entrega al banco.
-  const mpptCurr=(totWpInst/volt)*INV_SEC;
+  const mpptCurr=(totWpInst/volt)*P.invSec;
   const mpptSz=MPPT_SZ.find(s=>s>=mpptCurr)||MPPT_SZ[MPPT_SZ.length-1];
   const mpptOver=usaBat&&mpptCurr>MPPT_SZ[MPPT_SZ.length-1];
   if(mpptOver)avisos.push('El regulador necesario ('+f1(mpptCurr)+' A) supera el mayor de la tabla ('+
@@ -1651,18 +1732,18 @@ function calc(){
   // Máxima tensión MPPT: 150 V → N_series_max = floor(150 / Voc)
   const Vmpp=panWp<=200?18:panWp<=350?30:40;
   const Voc=f2(Vmpp*1.22);
-  const maxS=Math.max(1,Math.floor(VMAX_MPPT/Voc));
+  const maxS=Math.max(1,Math.floor(P.vmaxMppt/Voc));
   const panS=Math.min(nPan,maxS);
   const panP=Math.ceil(nPan/panS);
 
   // Cobertura: cuánto del consumo cubre realmente la instalación propuesta.
   const cobertura=totWh>0?whGen/totWh:0;
   // Superficie necesaria para montar los módulos.
-  const areaMod=nPan*(panWp/W_POR_M2);
-  const areaTecho=areaMod*FACTOR_TECHO;
+  const areaMod=nPan*(panWp/P.wPorM2);
+  const areaTecho=areaMod*P.factorTecho;
   return{totW,totWpk,totWh,volt,whStore,batS,batP,nBat,bankAh,bankWh,bankKwh,
     nPan,totWpInst,whGen,wpNeed,invReq,invSz,invCrit,invOver,mpptCurr,mpptSz,mpptOver,
-    panS,panP,Vmpp,Voc,hsp,hspAnual,hspPeor,critHsp,panWp,auto,bat,PR,ETA_bat,batOver,cobertura,avisos,
+    panS,panP,Vmpp,Voc,hsp,hspAnual,hspPeor,critHsp,panWp,auto,bat,PR,ETA_bat,ETA_inv,batOver,cobertura,avisos,
     fracDia,whFV,whBase,cobObj,sinInyeccion,inyecta:S.inyecta,profile:S.profile,
     fracResp,whRespDia,whEsencial,respaldoFuente,areaMod,areaTecho,
     sysType:S.sysType,consumoMode:S.consumoMode};
@@ -1678,8 +1759,8 @@ function calcROI(R,T){
   // más de lo que se puede consumir o inyectar.
   const utilDia=Math.min(R.whGen,R.whBase);
   const utilAnual=utilDia*365/1000;                       // kWh/año
-  const precio=parseFloat(S.precioKwh)||0;
-  const evitable=(parseFloat(S.porcionEvitable)||0)/100;
+  const precio=parseFloat(S.params.precioKwh)||0;
+  const evitable=(parseFloat(S.params.porcionEvitable)||0)/100;
   const ahorroAnual=utilAnual*precio*evitable;            // ARS/año
   const inversion=T.grand*S.tc;                           // ARS
   const repago=ahorroAnual>0?inversion/ahorroAnual:0;
@@ -1741,16 +1822,19 @@ ${tip('Trazabilidad de fórmulas — cómo se calculó cada componente',
   = ${fa(Math.round(R.whFV))} ÷ (${R.PR} × ${R.hsp}) = ${fa(Math.round(R.wpNeed))} Wp → ${R.nPan} paneles × ${R.panWp} Wp<br><br>
   <b>INVERSOR:</b><br>
   Se toma el mayor entre la carga nominal y el pico de arranque:<br>
-  P_inv = m\u00e1x(P_nominal × ${INV_SEC} ; P_pico ÷ ${SURGE}) = ${fa(Math.round(R.invReq))} W → ${fa(R.invSz)} W<br>
+  P_inv = m\u00e1x(P_nominal × ${S.params.invSec} ; P_pico ÷ ${S.params.surge}) = ${fa(Math.round(R.invReq))} W → ${fa(R.invSz)} W<br>
   En este caso queda ${R.invCrit}.<br><br>
   ${R.nBat>0?`<b>BATERÍAS:</b><br>
   Se dimensiona sobre el consumo respaldado (${R.respaldoFuente}), no sobre el total:<br>
   Wh_bruta = (Wh_respaldo ÷ 24 × auto_h) ÷ DoD ÷ η_bat ÷ η_inv<br>
-  = (${fa(Math.round(R.whRespDia))} ÷ 24 × ${R.auto}) ÷ ${R.bat.DoD} ÷ ${String(R.ETA_bat).replace('.',',')} ÷ ${String(ETA_INV).replace('.',',')} = ${fa(Math.round(R.whStore))} Wh<br><br>
+  = (${fa(Math.round(R.whRespDia))} ÷ 24 × ${R.auto}) ÷ ${R.bat.DoD} ÷ ${String(f2(R.ETA_bat)).replace('.',',')} ÷ ${String(f2(R.ETA_inv)).replace('.',',')} = ${fa(Math.round(R.whStore))} Wh<br><br>
   <b>MPPT:</b><br>
-  I_mppt_out = P_paneles ÷ V_bat × ${INV_SEC} = ${fa(R.totWpInst)} ÷ ${R.volt} × ${INV_SEC} = ${f1(R.mpptCurr)} A → ${R.mpptSz} A`:
+  I_mppt_out = P_paneles ÷ V_bat × ${S.params.invSec} = ${fa(R.totWpInst)} ÷ ${R.volt} × ${S.params.invSec} = ${f1(R.mpptCurr)} A → ${R.mpptSz} A`:
   '<b>Sin baterías</b>: sistema On Grid sin almacenamiento.'}`,'')}
 ${R.avisos.map(a=>`<div class="alert-warn">&#9888; ${a}</div>`).join('')}
+${(()=>{const m=paramsModificados();return m.length?`<div class="alert-ok" style="cursor:pointer" onclick="openParams()">
+  &#9881; ${m.length} criterio${m.length>1?'s':''} de c&aacute;lculo ajustado${m.length>1?'s':''} respecto de los valores de referencia:
+  ${m.map(k=>PARAMS_INFO[k][0]+' = '+S.params[k]).join(' &bull; ')}. Clic para revisarlos.</div>`:'';})()}
 <div class="res-grid">
   <div class="rc2 hi">
     <div class="rc2-lbl">&#9728; Paneles solares</div>
@@ -1983,14 +2067,14 @@ function roiHtml(R,T){
   <div class="row2">
     <div class="fld">
       <label>Precio del kWh (ARS, con impuestos)</label>
-      <input id="roi-kwh" type="number" min="0" step="10" value="${S.precioKwh}"
-        oninput="S.precioKwh=parseFloat(this.value)||0;roiRefresh()">
+      <input id="roi-kwh" type="number" min="0" step="10" value="${S.params.precioKwh}"
+        oninput="S.params.precioKwh=parseFloat(this.value)||0;roiRefresh()">
       <div class="section-note">Total de la factura dividido los kWh consumidos.</div>
     </div>
     <div class="fld">
       <label>Porci&oacute;n evitable de la factura (%)</label>
-      <input id="roi-evit" type="number" min="0" max="100" step="5" value="${S.porcionEvitable}"
-        oninput="S.porcionEvitable=parseFloat(this.value)||0;roiRefresh()">
+      <input id="roi-evit" type="number" min="0" max="100" step="5" value="${S.params.porcionEvitable}"
+        oninput="S.params.porcionEvitable=parseFloat(this.value)||0;roiRefresh()">
       <div class="section-note">Los cargos fijos e impuestos se siguen pagando aunque generes.</div>
     </div>
   </div>
@@ -2445,6 +2529,9 @@ OBSERVACIONES TÉCNICAS
   MPPT y discordancia de módulos (IEC 61724).
 • Irradiación basada en datos SEGEMAR/INTA.
 • Precios sin flete ni transporte salvo indicación contraria.
+${(()=>{const m=paramsModificados();return m.length?'\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nCRITERIOS DE CÁLCULO AJUSTADOS\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n'+
+  m.map(k=>'• '+PARAMS_INFO[k][0]+': '+S.params[k]+'  (referencia: '+PARAMS_DEF[k]+')').join('\n')+
+  '\nAjustados por el técnico responsable del presupuesto.\n':'';})()}
 
 ECOAPO · ecoapo.org
 Energía Solar Fotovoltaica · Argentina 2025`;
@@ -2654,6 +2741,22 @@ function exportPDF(){
     doc.text('TC referencial: 1 USD = ARS '+S.tc.toLocaleString('es-AR')+
       ' \u00b7 Precios sin flete ni transporte salvo indicaci\u00f3n contraria',ML,y);
   }
+  // Criterios ajustados por el técnico: quedan asentados en el documento.
+  const modP=paramsModificados();
+  if(modP.length){
+    if(y>230){doc.addPage();y=20;}
+    doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(...G1);
+    doc.text('Criterios de c\u00e1lculo ajustados',ML,y);y+=5;
+    doc.autoTable({startY:y,
+      head:[['Criterio','Usado','Referencia']],
+      body:modP.map(k=>[PARAMS_INFO[k][0],String(S.params[k]),String(PARAMS_DEF[k])]),
+      margin:{left:ML,right:MR},styles:{fontSize:8,cellPadding:2.5},
+      headStyles:{fillColor:G1,textColor:255,fontStyle:'bold',fontSize:7.5},
+      alternateRowStyles:{fillColor:[248,252,246]},
+      columnStyles:{1:{halign:'right',cellWidth:26},2:{halign:'right',cellWidth:26}},
+      theme:'grid'});
+    y=doc.lastAutoTable.finalY+8;
+  }
   // Propuesta técnica (Paso 8), incluida la edición manual del usuario.
   // Las líneas de guiones Unicode no existen en la codificación WinAnsi de
   // las fuentes estándar de jsPDF: se reemplazan por guiones ASCII.
@@ -2681,6 +2784,56 @@ function exportPDF(){
   }
   const fn='propuesta_solar_'+(S.project.name.replace(/\s+/g,'_')||'ecoapo')+'_'+new Date().toISOString().slice(0,10)+'.pdf';
   doc.save(fn);
+}
+
+// ── PANEL DE CRITERIOS ─────────────────────────────────────────────────────
+// Ningún criterio de cálculo queda fijo en el código: el técnico que firma el
+// presupuesto decide el PR, los factores de seguridad, los rendimientos y los
+// supuestos comerciales. Los valores de PARAMS_DEF son sólo un punto de partida.
+function paramsModificados(){
+  return Object.keys(PARAMS_DEF).filter(k=>Number(S.params[k])!==Number(PARAMS_DEF[k]));
+}
+function renderParams(){
+  const mods=new Set(paramsModificados());
+  $('params-body').innerHTML=PARAMS_GRUPOS.map(([titulo,claves])=>`
+  <div class="pgrp"><h4>${titulo}</h4>
+    ${claves.map(k=>{
+      const [lbl,help]=PARAMS_INFO[k];
+      const m=mods.has(k);
+      return `<div class="prow">
+        <div><div class="prow-lbl">${lbl}</div>${help?`<div class="prow-help">${help}</div>`:''}</div>
+        <div>
+          <input type="number" step="any" value="${S.params[k]}" class="${m?'mod':''}"
+            data-pk="${k}" oninput="paramChange(this)">
+          <div class="prow-def">ref. ${PARAMS_DEF[k]}</div>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`).join('');
+  const btn=$('btn-params');
+  if(btn)btn.classList.toggle('mod',mods.size>0);
+}
+function paramChange(inp){
+  const k=inp.dataset.pk;
+  const v=parseFloat(inp.value);
+  if(!isFinite(v))return;
+  S.params[k]=v;
+  inp.classList.toggle('mod',Number(v)!==Number(PARAMS_DEF[k]));
+  const btn=$('btn-params');
+  if(btn)btn.classList.toggle('mod',paramsModificados().length>0);
+  saveSoon();
+}
+function openParams(){renderParams();$('params-ov').classList.add('open');}
+function closeParams(){
+  $('params-ov').classList.remove('open');
+  S.results=calc();
+  renderMain();   // los resultados dependen de los criterios recién cambiados
+}
+function resetParams(){
+  if(!confirm('\u00bfRestaurar todos los criterios a los valores de referencia?'))return;
+  S.params={...PARAMS_DEF};
+  renderParams();
+  saveSoon();
 }
 
 // ── AVISO FLOTANTE ─────────────────────────────────────────────────────────
@@ -2713,6 +2866,7 @@ function loadState(){
     const d=JSON.parse(raw);
     if(!d||d.v!==1||!d.S)return false;
     Object.assign(S,d.S);   // los campos que no estén guardados quedan en su default
+    S.params={...PARAMS_DEF,...(d.S.params||{})};   // criterios nuevos toman su valor de referencia
     S.results=null;
     CUR=Math.min(Math.max(parseInt(d.CUR)||1,1),TOTAL);
     iid=parseInt(d.iid)||0;
@@ -2784,6 +2938,7 @@ function scormComplete(){
   renderMain();
   renderStepper();
   if(CUR===TOTAL)$('btn-scorm-done').disabled=false;
+  if(paramsModificados().length)$('btn-params').classList.add('mod');
   document.addEventListener('input',saveSoon);
   document.addEventListener('change',saveSoon);
   if(restaurado)setTimeout(()=>toast(

@@ -18,9 +18,10 @@ module.exports=function cargarMotor(){
       .replace('const $=id=>document.getElementById(id);','const $=()=>null;')
     +corte(src,'// ── CALCULATION ENGINE','// ── STEP 6:')
     +src.match(/function quoteTotals\(\)\{[\s\S]*?\n\}/)[0]
-    +src.match(/function calcROI\(R,T\)\{[\s\S]*?\n\}/)[0];
+    +src.match(/function calcROI\(R,T\)\{[\s\S]*?\n\}/)[0]
+    +src.match(/function paramsModificados\(\)\{[\s\S]*?\n\}/)[0];
   const ctx={module:{},console};
   vm.createContext(ctx);
-  vm.runInContext(code+'\n;this.calc=calc;this.quoteTotals=quoteTotals;this.calcROI=calcROI;this.S=S;',ctx);
+  vm.runInContext(code+'\n;this.calc=calc;this.quoteTotals=quoteTotals;this.calcROI=calcROI;this.paramsModificados=paramsModificados;this.PARAMS_DEF=PARAMS_DEF;this.S=S;',ctx);
   return ctx;
 };

@@ -62,22 +62,35 @@ las interpolan, para que la fórmula que se muestra sea siempre la que se usa.
 | MPPT | `I = P_paneles ÷ V_sistema × 1,25` |
 | Cotización | markup sobre el costo neto; IVA sobre el precio de venta |
 
-### Supuestos a validar
+### Criterios de cálculo
 
-Estos valores son de referencia y conviene que EcoApo los revise contra sus
-propios datos. Están todos juntos arriba del script, como constantes.
+**Ningún criterio está fijo en el código.** Los define el técnico que arma el
+presupuesto, desde el botón **⚙ Criterios** de la barra superior: dependen del
+equipo que se cotiza, del tipo de montaje y de la política comercial.
 
-- **HSP del peor mes** (`REGIONS[].hspMin`): estimados por región. Para un
-  proyecto ejecutivo hay que validarlos con datos del sitio (SEGEMAR / INTA /
-  PVGIS) y cargarlos a mano en el Paso 4.
-- **Precio del kWh** (`PRECIO_KWH_DEF`, ARS 190) y **porción evitable de la
-  factura** (`PORCION_EVITABLE_DEF`, 60%): mueven el repago directamente.
-  Revisar al menos cada 3 meses; las tarifas argentinas se mueven.
-- **Superficie** (`W_POR_M2`, `FACTOR_TECHO`): asumen módulo cristalino actual
-  y montaje con separación entre filas.
-- **Factor de carga** (`FACTOR_CARGA`, 15%): estima la potencia simultánea a
-  partir de la energía cuando el consumo se carga desde la factura. Conviene
-  cargar la potencia real cuando se conoce.
+`PARAMS_DEF` sólo aporta valores de arranque. Cada campo muestra su valor de
+referencia debajo, los modificados quedan resaltados, y hay un botón para
+restaurarlos todos.
+
+| Grupo | Criterios |
+|---|---|
+| Generación | Performance Ratio con baterías y On Grid, W/m² de módulo, factor de superficie de techo |
+| Inversor y regulador | Factor de seguridad, sobrecarga de arranque tolerada, rendimiento del inversor, tensión máx. de entrada MPPT |
+| Baterías | Round-trip LiFePO4 y AGM/Gel |
+| Consumo | Fracción diurna por perfil, factor de carga |
+| Retorno de inversión | Precio del kWh, porción evitable de la factura |
+
+Los criterios que se apartan de la referencia quedan asentados en la propuesta
+y en el PDF, en una sección aparte, para que la decisión sea trazable.
+
+Fuera del panel, también se definen por proyecto: HSP anual y de invierno más
+el criterio de diseño (Paso 4), tipo de sistema, inyección, cobertura solar
+objetivo y consumo respaldado (Paso 5), y las cargas esenciales (Paso 2).
+
+**A validar contra datos propios:** las HSP del peor mes (`REGIONS[].hspMin`)
+son estimadas por región; para un proyecto ejecutivo conviene cargarlas a mano
+desde datos del sitio (SEGEMAR / INTA / PVGIS). El precio del kWh y la porción
+evitable mueven el repago directamente: revisarlos al menos cada 3 meses.
 
 ### Limitaciones conocidas
 

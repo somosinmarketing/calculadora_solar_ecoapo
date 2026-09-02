@@ -1,6 +1,6 @@
 // Tests del motor de dimensionado y del cálculo de totales.
 //   node tests/unit.js
-const {calc,quoteTotals,calcROI,S}=require('./extract.js')();
+const {calc,quoteTotals,calcROI,paramsModificados,PARAMS_DEF,S}=require('./extract.js')();
 
 let fail=0;
 const chk=(n,c,d)=>{if(!c)fail++;console.log((c?'  OK  ':' FALLA')+'  '+n+(d?'\n          '+d:''));};
@@ -8,7 +8,7 @@ const base=()=>Object.assign(S,{consumoMode:'equipos',items:[],facturaKwh:0,fact
   profile:'equilibrado',hsp:4.5,panWp:500,autonomy:24,autonomyCustom:0,
   batId:'lfe100-48',sysType:'offgrid',voltOv:'auto',markup:20,iva:0,quoteItems:[],
   inyecta:null,respaldo:'auto',hspMin:2.6,hspCriterio:'auto',coberturaObj:100,
-  tc:1400,precioKwh:190,porcionEvitable:60});
+  tc:1400,params:{...PARAMS_DEF}});
 
 console.log('\n=== Totales de la cotización ===');
 // El markup va sobre el costo neto y el IVA sobre el precio de venta.
@@ -202,6 +202,62 @@ S.quoteItems=[{price:'5000',qty:1,iva:0}];
 roi=calcROI(R,quoteTotals());
 chk('sin inyección el ahorro se limita al consumo diurno', roi.utilAnual<=R.whBase*365/1000+1e-6,
     Math.round(roi.utilAnual)+' kWh/año sobre un consumo diurno de '+Math.round(R.whBase*365/1000)+' kWh/año');
+
+console.log('\n=== Criterios definidos por el técnico ===');
+base(); S.sysType='hybrid'; S.inyecta=true; S.batId='lfe300-48';
+S.items=[{id:1,device:'Casa',w:1000,qty:1,hd:8,pk:1}];
+R=calc();
+chk('sin cambios no hay criterios ajustados', paramsModificados().length===0);
+const panRef=R.nPan, invRef=R.invReq, areaRef=R.areaMod;
+
+// Performance Ratio: lo define el técnico según la instalación.
+base(); S.sysType='hybrid'; S.inyecta=true; S.batId='lfe300-48'; S.params.prBat=0.60;
+S.items=[{id:1,device:'Casa',w:1000,qty:1,hd:8,pk:1}];
+R=calc();
+chk('bajar el PR pide más paneles', R.nPan>panRef, R.nPan+' con PR 0,60 vs '+panRef+' con 0,75');
+chk('el criterio queda marcado como ajustado', paramsModificados().includes('prBat'), paramsModificados().join(', '));
+
+// Factor de seguridad del inversor.
+base(); S.sysType='hybrid'; S.inyecta=true; S.batId='lfe300-48'; S.params.invSec=1.5;
+S.items=[{id:1,device:'Casa',w:1000,qty:1,hd:8,pk:1}];
+R=calc();
+chk('subir el factor de seguridad agranda el inversor', R.invReq>invRef,
+    Math.round(R.invReq)+' W requeridos con 1,5 vs '+Math.round(invRef)+' W con 1,25');
+
+// Superficie según el módulo real.
+base(); S.sysType='hybrid'; S.inyecta=true; S.batId='lfe300-48'; S.params.wPorM2=230;
+S.items=[{id:1,device:'Casa',w:1000,qty:1,hd:8,pk:1}];
+R=calc();
+chk('un módulo más eficiente ocupa menos', R.areaMod<areaRef,
+    R.areaMod.toFixed(1)+' m² con 230 W/m² vs '+areaRef.toFixed(1)+' m² con 200');
+
+// Fracción diurna del perfil.
+base(); S.sysType='ongrid'; S.inyecta=false; S.profile='equilibrado';
+S.params.fracEquilibrado=40;
+S.items=[{id:1,device:'Casa',w:1000,qty:1,hd:8,pk:1}];
+R=calc();
+chk('el perfil usa el porcentaje que cargó el técnico', Math.abs(R.fracDia-0.40)<1e-9,
+    Math.round(R.fracDia*100)+'% diurno -> '+Math.round(R.whFV)+' Wh a cubrir');
+
+// Rendimiento del inversor en el banco.
+base(); S.sysType='offgrid'; S.batId='lfe300-48'; S.params.etaInv=90;
+S.items=[{id:1,device:'Casa',w:1000,qty:1,hd:8,pk:1}];
+R=calc();
+chk('el rendimiento del inversor entra en el banco', Math.abs(R.ETA_inv-0.90)<1e-9,
+    'eta_inv='+R.ETA_inv+' -> '+Math.round(R.whStore)+' Wh a almacenar');
+
+// Supuestos comerciales del repago.
+base(); S.sysType='ongrid'; S.inyecta=true; S.markup=0;
+S.params.precioKwh=400; S.params.porcionEvitable=80;
+S.items=[{id:1,device:'Casa',w:1000,qty:1,hd:8,pk:1}];
+R=calc();
+S.quoteItems=[{price:'5000',qty:1,iva:0}];
+roi=calcROI(R,quoteTotals());
+chk('el repago usa los supuestos del técnico',
+    Math.abs(roi.ahorroAnual-roi.utilAnual*400*0.8)<1e-6,
+    'ARS '+Math.round(roi.ahorroAnual)+'/año, repago '+roi.repago.toFixed(1)+' años');
+chk('los dos criterios tocados quedan registrados', paramsModificados().length===2,
+    paramsModificados().join(', '));
 
 console.log(fail===0?'\n===== TESTS UNITARIOS OK =====':'\n===== '+fail+' FALLAS =====');
 process.exit(fail?1:0);
