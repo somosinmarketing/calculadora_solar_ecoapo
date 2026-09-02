@@ -1560,18 +1560,11 @@ function s7(){
   const R=S.results;
   const pl=S.priceList;
   syncQuoteWithDesign(R);
-  let sumUSD=0,allOk=S.quoteItems.length>0;
-  S.quoteItems.forEach(it=>{
-    const p=parseFloat(it.price)||0;
-    if(p>0)sumUSD+=p*it.qty;else allOk=false;
-  });
-  const wMark=sumUSD*(1+S.markup/100);
-  const wIva=wMark*(1+S.iva/100);
+  const T=quoteTotals();
   const rows=S.quoteItems.map(it=>{
     if(it.iva===undefined)it.iva=S.iva;
     const p=parseFloat(it.price)||0,ok=p>0;
-    const itemIva=parseFloat(it.iva)||0;
-    const tot=ok?p*it.qty*(1+itemIva/100):0;
+    const tot=ok?p*it.qty:0;   // neto de la fila; markup e IVA van en el pie
     const matched=it._autoMatched?` title="Auto: ${esc(it._autoMatched)}" style="border-bottom:1px dashed var(--g2)"`:' ';
     return`<tr>
 <td><input class="nm" type="text" value="${esc(it.comp)}"
@@ -1650,34 +1643,66 @@ ${tip('Cómo usar las listas de precios y el Markup distribuidor',
       <th style="width:7%;text-align:center">Cant.</th>
       <th class="r" style="width:11%">P.Unit.USD</th>
       <th class="r" style="width:8%">IVA%</th>
-      <th class="r" style="width:13%">Total USD</th>
-      <th class="r" style="width:13%">Total ARS</th>
+      <th class="r" style="width:13%">Neto USD</th>
+      <th class="r" style="width:13%">Neto ARS</th>
       <th style="width:4%"></th>
     </tr></thead>
     <tbody>${rows}</tbody>
     <tfoot>
       <tr class="tot-row">
-        <td colspan="4">Subtotal materiales</td>
-        <td class="r mono" id="q-sub-usd">${allOk?'USD '+fa(Math.round(sumUSD)):'—'}</td>
-        <td class="r mono" style="font-size:11px" id="q-sub-ars">${allOk?'ARS '+fa(Math.round(sumUSD*S.tc)):'—'}</td>
+        <td colspan="4">Subtotal materiales (neto)</td>
+        <td class="r mono" id="q-sub-usd">${T.net>0?'USD '+fa(Math.round(T.net)):'—'}</td>
+        <td class="r mono" style="font-size:11px" id="q-sub-ars">${T.net>0?'ARS '+fa(Math.round(T.net*S.tc)):'—'}</td>
         <td></td></tr>
-      ${S.markup>0?`<tr class="tot-row">
-        <td colspan="4">+ Markup distribuidor ${S.markup}%</td>
-        <td class="r mono" id="q-mark-usd">${sumUSD>0?'USD '+fa(Math.round(wMark-sumUSD)):'—'}</td>
-        <td></td>
-      </tr>`:`<tr class="tot-row" id="q-mark-row">
-        <td colspan="4">+ Markup distribuidor ${S.markup}%</td>
-        <td class="r mono" id="q-mark-usd">—</td><td></td></tr>`}
-      <tr class="tot-row"><td colspan="4" style="font-size:11px;color:var(--ts)">IVA incluido por ítem</td>
-        <td class="r mono" id="q-iva-usd" style="font-size:11px;color:var(--ts)">(por ítem)</td><td></td></tr>
+      <tr class="tot-row">
+        <td colspan="4">+ Markup distribuidor <span id="q-mark-pct">${S.markup}</span>%</td>
+        <td class="r mono" id="q-mark-usd">${T.net>0&&S.markup>0?'USD '+fa(Math.round(T.markupAmt)):'—'}</td>
+        <td></td><td></td></tr>
+      <tr class="tot-row">
+        <td colspan="4">Precio de venta (sin IVA)</td>
+        <td class="r mono" id="q-sale-usd">${T.net>0?'USD '+fa(Math.round(T.sale)):'—'}</td>
+        <td></td><td></td></tr>
+      <tr class="tot-row">
+        <td colspan="4" style="font-size:11px;color:var(--ts)">+ IVA (por ítem, sobre precio de venta)</td>
+        <td class="r mono" id="q-iva-usd" style="font-size:11px;color:var(--ts)">${T.net>0?'USD '+fa(Math.round(T.ivaAmt)):'—'}</td>
+        <td></td><td></td></tr>
       <tr class="grand-row">
         <td colspan="4" style="font-size:13px;font-weight:800">TOTAL FINAL</td>
-        <td class="r mono" style="font-size:14px" id="q-grand-usd">${sumUSD>0?'USD '+fa(Math.round(wIva)):'Carg\u00e1 precios'}</td>
-        <td class="r" style="font-size:11px;color:rgba(255,255,255,.65)" id="q-grand-ars">${sumUSD>0?'ARS '+fa(Math.round(wIva*S.tc)):'—'}</td>
+        <td class="r mono" style="font-size:14px" id="q-grand-usd">${T.net>0?'USD '+fa(Math.round(T.grand)):'Carg\u00e1 precios'}</td>
+        <td class="r" style="font-size:11px;color:rgba(255,255,255,.65)" id="q-grand-ars">${T.net>0?'ARS '+fa(Math.round(T.grand*S.tc)):'—'}</td>
+        <td></td>
       </tr>
     </tfoot>
   </table></div>
 </div>`;
+}
+
+// ── QUOTE: TOTALES (fuente única de verdad) ────────────────────────────────
+// Criterio: el markup se aplica sobre el COSTO neto, y el IVA sobre el
+// PRECIO DE VENTA (neto + markup). Nunca al revés: cobrar markup sobre el
+// IVA sería cargarle un margen a un impuesto.
+//
+//   neto_fila   = precio_unitario x cantidad
+//   venta_fila  = neto_fila x (1 + markup/100)
+//   iva_fila    = venta_fila x (iva_fila%/100)
+//   TOTAL FINAL = SUM(venta_fila) + SUM(iva_fila)
+//
+// Toda la app (Paso 7, Paso 8 y el PDF) debe llamar a esta función. Antes
+// cada uno calculaba distinto y los tres daban números diferentes.
+function quoteTotals(){
+  let net=0,ivaAmt=0,allOk=S.quoteItems.length>0;
+  S.quoteItems.forEach(it=>{
+    const p=parseFloat(it.price)||0;
+    const q=parseInt(it.qty)||0;
+    if(p>0&&q>0){
+      const lineNet=p*q;
+      net+=lineNet;
+      ivaAmt+=lineNet*(1+S.markup/100)*((parseFloat(it.iva)||0)/100);
+    } else allOk=false;
+  });
+  const markupAmt=net*(S.markup/100);
+  const sale=net+markupAmt;
+  return{net,markupAmt,sale,ivaAmt,grand:sale+ivaAmt,allOk};
 }
 
 // ── QUOTE: SINCRONIZACIÓN CON EL DISEÑO ────────────────────────────────────
@@ -1717,24 +1742,24 @@ function resetQuote(){
 }
 
 // ── QUOTE: TARGETED UPDATES (no renderMain during typing) ──────────────────
+// Refresca las celdas de neto (USD/ARS) de una fila. El markup y el IVA no
+// se muestran por fila: viven en el pie de la tabla.
+function qRowCells(id){
+  const it=S.quoteItems.find(x=>x.id===id);if(!it)return;
+  const tot=(parseFloat(it.price)||0)*(parseInt(it.qty)||0);
+  const tdT=$('qt-'+id),tdA=$('qa-'+id);
+  if(tdT)tdT.innerHTML=tot>0?'USD '+fa(Math.round(tot)):'<span style="color:#bbb">—</span>';
+  if(tdA)tdA.textContent=tot>0?'ARS '+fa(Math.round(tot*S.tc)):'—';
+}
 function qPrice(inp){
   const id=parseInt(inp.dataset.qid);
   const it=S.quoteItems.find(x=>x.id===id);if(!it)return;
   it.price=inp.value;
-  const p=parseFloat(it.price)||0,itemIva=parseFloat(it.iva)||0;
-  const tot=p*it.qty*(1+itemIva/100);
-  const tdT=$('qt-'+id),tdA=$('qa-'+id);
-  if(tdT)tdT.innerHTML=tot>0?'USD '+fa(Math.round(tot)):'<span style="color:#bbb">—</span>';
-  if(tdA)tdA.textContent=tot>0?'ARS '+fa(Math.round(tot*S.tc)):'—';
-  qUpdateTotals();
+  qRowCells(id);qUpdateTotals();
 }
 function tcChange(inp){
   S.tc=parseFloat(inp.value)||1200;
-  S.quoteItems.forEach(it=>{
-    const p=parseFloat(it.price)||0,tot=p*it.qty;
-    const tdA=$('qa-'+it.id);
-    if(tdA&&tot>0)tdA.textContent='ARS '+fa(Math.round(tot*S.tc));
-  });
+  S.quoteItems.forEach(it=>qRowCells(it.id));
   qUpdateTotals();
   const mn=$('markup-val');
   if(mn)mn.parentElement.querySelector('.markup-note').textContent=
@@ -1757,33 +1782,22 @@ function ivaChange(inp){
       // Actualizar el input de IVA de esa fila si existe en el DOM
       const ivaEl=$('iv-'+it.id);
       if(ivaEl)ivaEl.value=S.iva===0?'':S.iva;
-      // Recalcular y actualizar la celda de total de esa fila
-      const p=parseFloat(it.price)||0,tot=p*it.qty*(1+S.iva/100);
-      const tdT=$('qt-'+it.id),tdA=$('qa-'+it.id);
-      if(tdT)tdT.innerHTML=tot>0?'USD '+fa(Math.round(tot)):'<span style="color:#bbb">—</span>';
-      if(tdA)tdA.textContent=tot>0?'ARS '+fa(Math.round(tot*S.tc)):'—';
     }
   });
   qUpdateTotals();
 }
 
 function qUpdateTotals(){
-  let sum=0,allOk=S.quoteItems.length>0;
-  S.quoteItems.forEach(it=>{
-    const p=parseFloat(it.price)||0;
-    const itemIva=parseFloat(it.iva===undefined?S.iva:it.iva)||0;
-    if(p>0)sum+=p*it.qty*(1+itemIva/100);else allOk=false;
-  });
-  const wMark=sum*(1+S.markup/100);
-  const wIva=wMark; // IVA ya incluido por ítem; fila global solo para markup
+  const T=quoteTotals();
   const set=(id,v)=>{const el=$(id);if(el)el.textContent=v;};
-  const setHTML=(id,v)=>{const el=$(id);if(el)el.innerHTML=v;};
-  set('q-sub-usd',sum>0?'USD '+fa(Math.round(sum)):'—');
-  set('q-sub-ars',sum>0?'ARS '+fa(Math.round(sum*S.tc)):'—');
-  set('q-mark-usd',sum>0&&S.markup>0?'USD '+fa(Math.round(wMark-sum)):'—');
-  set('q-iva-usd','(por ítem)');
-  setHTML('q-grand-usd',sum>0?'USD '+fa(Math.round(wMark)):'Carg\u00e1 precios');
-  set('q-grand-ars',sum>0?'ARS '+fa(Math.round(wMark*S.tc)):'—');
+  set('q-sub-usd',  T.net>0?'USD '+fa(Math.round(T.net)):'—');
+  set('q-sub-ars',  T.net>0?'ARS '+fa(Math.round(T.net*S.tc)):'—');
+  set('q-mark-pct', S.markup);
+  set('q-mark-usd', T.net>0&&S.markup>0?'USD '+fa(Math.round(T.markupAmt)):'—');
+  set('q-sale-usd', T.net>0?'USD '+fa(Math.round(T.sale)):'—');
+  set('q-iva-usd',  T.net>0?'USD '+fa(Math.round(T.ivaAmt)):'—');
+  set('q-grand-usd',T.net>0?'USD '+fa(Math.round(T.grand)):'Carg\u00e1 precios');
+  set('q-grand-ars',T.net>0?'ARS '+fa(Math.round(T.grand*S.tc)):'—');
 }
 function addQuoteRow(){
   S.quoteItems.push({comp:'Ítem adicional',qty:1,price:'',iva:S.iva,id:uid(),type:'extra'});
@@ -1802,22 +1816,13 @@ function qQty(inp){
   const id=parseInt(inp.dataset.qid);
   const it=S.quoteItems.find(x=>x.id===id);if(!it)return;
   it.qty=Math.max(1,parseInt(inp.value)||1);
-  const p=parseFloat(it.price)||0,itemIva=parseFloat(it.iva)||0;
-  const tot=p*it.qty*(1+itemIva/100);
-  const tdT=$('qt-'+id),tdA=$('qa-'+id);
-  if(tdT)tdT.innerHTML=tot>0?'USD '+fa(Math.round(tot)):'<span style="color:#bbb">—</span>';
-  if(tdA)tdA.textContent=tot>0?'ARS '+fa(Math.round(tot*S.tc)):'—';
-  qUpdateTotals();
+  qRowCells(id);qUpdateTotals();
 }
 function qIva(inp){
   const id=parseInt(inp.dataset.qid);
   const it=S.quoteItems.find(x=>x.id===id);if(!it)return;
   it.iva=parseFloat(inp.value)||0;
-  const p=parseFloat(it.price)||0,tot=p*it.qty*(1+it.iva/100);
-  const tdT=$('qt-'+id),tdA=$('qa-'+id);
-  if(tdT)tdT.innerHTML=tot>0?'USD '+fa(Math.round(tot)):'<span style="color:#bbb">—</span>';
-  if(tdA)tdA.textContent=tot>0?'ARS '+fa(Math.round(tot*S.tc)):'—';
-  qUpdateTotals();
+  qUpdateTotals();   // el IVA sólo afecta al pie
 }
 
 // ── AUTO-FILL PRICES FROM PRICE LIST ───────────────────────────────────────
@@ -2044,8 +2049,8 @@ function s8(){
   const loc=S.project.location||'zona indicada';
   const tipo=S.project.type;
   const sys={offgrid:'Off Grid (autónomo)',ongrid:'On Grid (conectado a la red)',hybrid:'Híbrido (red + baterías)'}[R.sysType];
-  const sumUSD=S.quoteItems.reduce((t,i)=>t+(parseFloat(i.price)||0)*i.qty,0);
-  const tot=sumUSD*(1+S.markup/100)*(1+S.iva/100);
+  const T=quoteTotals();   // mismo cálculo que el Paso 7 y el PDF
+  const tot=T.grand;
   const propText=`PROPUESTA TÉCNICA PRELIMINAR
 ECOAPO · Energía Solar Fotovoltaica
 Fecha: ${now}
@@ -2083,10 +2088,14 @@ Performance Ratio: ${R.PR} (factor rendimiento global)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ESTIMACIÓN ECONÓMICA
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${tot>0?`Total estimado:    USD ${Math.round(tot).toLocaleString('es-AR')}
+${tot>0?`Materiales (neto): USD ${Math.round(T.net).toLocaleString('es-AR')}
+Markup ${String(S.markup).padEnd(3)}%:        USD ${Math.round(T.markupAmt).toLocaleString('es-AR')}
+Precio sin IVA:    USD ${Math.round(T.sale).toLocaleString('es-AR')}
+IVA:               USD ${Math.round(T.ivaAmt).toLocaleString('es-AR')}
+TOTAL ESTIMADO:    USD ${Math.round(tot).toLocaleString('es-AR')}
 Equivalente ARS:   ARS ${Math.round(tot*S.tc).toLocaleString('es-AR')}
 Tipo de cambio:    1 USD = ARS ${S.tc.toLocaleString('es-AR')}
-${S.iva>0?'IVA aplicado:      '+S.iva+'%\n':''}Precio es orientativo sujeto a disponibilidad de stock.`:'Precios pendientes de confirmación con proveedor.'}
+Precio es orientativo sujeto a disponibilidad de stock.`:'Precios pendientes de confirmación con proveedor.'}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 OBSERVACIONES TÉCNICAS
@@ -2277,15 +2286,22 @@ function exportPDF(){
     if(y>220)doc.addPage();
     doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(...G1);
     doc.text('Cotizaci\u00f3n estimada',ML,y);y+=5;
-    let sum=0;
-    const qRows=qItems.map(i=>{const p=parseFloat(i.price),itemIva=(parseFloat(i.iva)||0)/100,t=p*i.qty*(1+itemIva);sum+=t;
-      return[i.comp,i.qty,itemIva>0?'USD '+p.toFixed(2)+' +'+Math.round(itemIva*100)+'%':'USD '+p.toFixed(2),'USD '+fa(Math.round(t)),'ARS '+fa(Math.round(t*S.tc))];});
-    const wM=sum*(1+S.markup/100),wI=wM; // IVA ya incluido por ítem
+    const T=quoteTotals();   // mismo cálculo que el Paso 7 y el Paso 8
+    const qRows=qItems.map(i=>{
+      const p=parseFloat(i.price),t=p*i.qty;
+      return[i.comp,i.qty,'USD '+p.toFixed(2),'USD '+fa(Math.round(t)),'ARS '+fa(Math.round(t*S.tc))];
+    });
+    const sub=(lbl,usd)=>qRows.push([{content:lbl,styles:{fontStyle:'bold'}},'',' ',
+      {content:'USD '+fa(Math.round(usd)),styles:{fontStyle:'bold'}},'']);
+    sub('Subtotal materiales (neto)',T.net);
+    if(S.markup>0)sub('+ Markup distribuidor '+S.markup+'%',T.markupAmt);
+    sub('Precio de venta (sin IVA)',T.sale);
+    if(T.ivaAmt>0)sub('+ IVA',T.ivaAmt);
     qRows.push([{content:'TOTAL',styles:{fontStyle:'bold',textColor:G1}},'',' ',
-      {content:'USD '+fa(Math.round(wI)),styles:{fontStyle:'bold',textColor:G1}},
-      {content:'ARS '+fa(Math.round(wI*S.tc)),styles:{textColor:GR}}]);
+      {content:'USD '+fa(Math.round(T.grand)),styles:{fontStyle:'bold',textColor:G1}},
+      {content:'ARS '+fa(Math.round(T.grand*S.tc)),styles:{textColor:GR}}]);
     doc.autoTable({startY:y,
-      head:[['Componente','Cant.','P.Unit.USD','Total USD','Total ARS']],
+      head:[['Componente','Cant.','P.Unit.USD','Neto USD','Neto ARS']],
       body:qRows,margin:{left:ML,right:MR},
       styles:{fontSize:8,cellPadding:2.5},
       headStyles:{fillColor:G1,textColor:255,fontStyle:'bold',fontSize:7.5},
@@ -2297,6 +2313,21 @@ function exportPDF(){
     doc.setFontSize(7.5);doc.setFont('helvetica','italic');doc.setTextColor(...GR);
     doc.text('TC referencial: 1 USD = ARS '+S.tc.toLocaleString('es-AR')+
       ' \u00b7 Precios sin flete ni transporte salvo indicaci\u00f3n contraria',ML,y);
+  }
+  // Propuesta técnica (Paso 8), incluida la edición manual del usuario.
+  // Las líneas de guiones Unicode no existen en la codificación WinAnsi de
+  // las fuentes estándar de jsPDF: se reemplazan por guiones ASCII.
+  if(S.proposal){
+    const txt=S.proposal.replace(/[\u2500-\u257F]/g,'-').replace(/[\u2190-\u21FF]/g,'->');
+    doc.addPage();
+    let py=20;
+    doc.setFont('helvetica','bold');doc.setFontSize(11);doc.setTextColor(...G1);
+    doc.text('Propuesta t\u00e9cnica',ML,py);py+=7;
+    doc.setFont('courier','normal');doc.setFontSize(7.5);doc.setTextColor(60,60,60);
+    doc.splitTextToSize(txt,CW).forEach(ln=>{
+      if(py>PH-20){doc.addPage();py=20;}
+      doc.text(ln,ML,py);py+=3.6;
+    });
   }
   // Footer
   const tp=doc.internal.getNumberOfPages();
