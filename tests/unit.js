@@ -1,14 +1,15 @@
 // Tests del motor de dimensionado y del cálculo de totales.
 //   node tests/unit.js
-const {calc,quoteTotals,calcROI,paramsModificados,PARAMS_DEF,S}=require('./extract.js')();
+const {calc,quoteTotals,calcROI,paramsModificados,ivaDeTipo,PARAMS_DEF,S}=require('./extract.js')();
 
 let fail=0;
+const f1v=n=>Math.round(n*10)/10;
 const chk=(n,c,d)=>{if(!c)fail++;console.log((c?'  OK  ':' FALLA')+'  '+n+(d?'\n          '+d:''));};
 const base=()=>Object.assign(S,{consumoMode:'equipos',items:[],facturaKwh:0,facturaW:0,
   profile:'equilibrado',hsp:4.5,panWp:500,autonomy:24,autonomyCustom:0,
   batId:'lfe100-48',sysType:'offgrid',voltOv:'auto',markup:20,iva:0,quoteItems:[],
   inyecta:null,respaldo:'auto',hspMin:2.6,hspCriterio:'auto',coberturaObj:100,
-  tc:1400,params:{...PARAMS_DEF}});
+  tc:1400,params:JSON.parse(JSON.stringify(PARAMS_DEF))});
 
 console.log('\n=== Totales de la cotización ===');
 // El markup va sobre el costo neto y el IVA sobre el precio de venta.
@@ -258,6 +259,48 @@ chk('el repago usa los supuestos del técnico',
     'ARS '+Math.round(roi.ahorroAnual)+'/año, repago '+roi.repago.toFixed(1)+' años');
 chk('los dos criterios tocados quedan registrados', paramsModificados().length===2,
     paramsModificados().join(', '));
+
+console.log('\n=== IVA diferenciado por componente ===');
+base(); S.sysType='hybrid'; S.inyecta=true; S.batId='lfe300-48'; S.quoteItems=[];
+S.items=[{id:1,device:'Casa',w:1000,qty:1,hd:8,pk:1}];
+R=calc();
+chk('los paneles llevan alícuota reducida', ivaDeTipo('panel')===10.5, ivaDeTipo('panel')+'%');
+chk('el resto lleva la alícuota general',
+    ['inv','bat','mppt','estr','cab','mdo','extra'].every(t=>ivaDeTipo(t)===21), '21%');
+S.params.ivaPaneles=0;
+chk('la alícuota de paneles la define el técnico', ivaDeTipo('panel')===0, '0% tras editarla');
+S.params.ivaPaneles=10.5;
+S.markup=0;
+S.quoteItems=[{price:'1000',qty:1,iva:10.5},{price:'1000',qty:1,iva:21}];
+T=quoteTotals();
+chk('el total mezcla ambas alícuotas', Math.abs(T.ivaAmt-315)<1e-9,
+    'IVA = 105 (panel) + 210 (resto) = '+T.ivaAmt);
+
+console.log('\n=== Recarga del banco (lo que la HSP no cubre) ===');
+// Banco chico con mucho panel: la corriente supera lo que admite.
+base(); S.sysType='offgrid'; S.batId='agm100-12'; S.voltOv='12'; S.hspCriterio='anual';
+S.items=[{id:1,device:'Casa',w:300,qty:1,hd:10,pk:1}];
+R=calc();
+chk('calcula la corriente de carga disponible', R.iCargaDisp>0,
+    f1v(R.iCargaDisp)+' A del generador vs '+f1v(R.iMaxBanco)+' A que admite el banco');
+chk('avisa si el generador supera lo que el banco tolera',
+    R.iCargaDisp<=R.iMaxBanco||R.avisos.some(a=>a.includes('admite')),
+    (R.avisos.find(a=>a.includes('admite'))||'(no hace falta avisar)').slice(0,80));
+
+// Autonomía larga: el banco no se repone en una ventana de sol.
+base(); S.sysType='offgrid'; S.batId='lfe300-48'; S.autonomy=72; S.hspCriterio='anual';
+S.items=[{id:1,device:'Casa',w:500,qty:1,hd:10,pk:1}];
+R=calc();
+chk('estima el tiempo de recarga desde vacío', R.tRecarga>0, f1v(R.tRecarga)+' h');
+chk('avisa cuando no entra en la ventana de sol útil',
+    R.tRecarga<=R.horasSolUtiles||R.avisos.some(a=>a.includes('ventana de sol')),
+    (R.avisos.find(a=>a.includes('ventana de sol'))||'(entra en la ventana)').slice(0,80));
+
+// La ventana la define el técnico.
+S.params.horasSolUtiles=24; R=calc();
+chk('ampliar la ventana quita el aviso de recarga',
+    !R.avisos.some(a=>a.includes('ventana de sol')),
+    'ventana de 24 h para una recarga de '+f1v(R.tRecarga)+' h');
 
 console.log(fail===0?'\n===== TESTS UNITARIOS OK =====':'\n===== '+fail+' FALLAS =====');
 process.exit(fail?1:0);

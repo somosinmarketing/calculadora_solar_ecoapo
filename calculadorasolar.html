@@ -38,17 +38,20 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 #btn-params:hover{background:rgba(255,255,255,.12);color:#fff}
 #btn-params.mod{border-color:var(--am);color:var(--am)}
 #params-ov{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:none;
-  overflow-y:auto;padding:20px 12px}
-#params-ov.open{display:block}
-#params-box{background:#fff;max-width:660px;margin:0 auto;border-radius:var(--r);
-  box-shadow:0 12px 40px rgba(0,0,0,.3)}
-#params-hd{position:sticky;top:0;background:var(--g1);color:#fff;padding:13px 16px;
-  border-radius:var(--r) var(--r) 0 0;display:flex;align-items:center;justify-content:space-between;gap:10px}
+  padding:20px 12px}
+#params-ov.open{display:flex;align-items:center;justify-content:center}
+/* El panel es una columna de alto acotado: sólo el cuerpo scrollea, así el
+   encabezado y el pie nunca se superponen con el contenido. */
+#params-box{background:#fff;width:100%;max-width:660px;border-radius:var(--r);
+  box-shadow:0 12px 40px rgba(0,0,0,.3);
+  max-height:calc(100vh - 40px);display:flex;flex-direction:column;overflow:hidden}
+#params-hd{flex-shrink:0;background:var(--g1);color:#fff;padding:13px 16px;
+  display:flex;align-items:center;justify-content:space-between;gap:10px}
 #params-hd h3{font-size:14px;font-weight:700;margin:0}
 #params-hd p{font-size:11px;color:var(--g2);margin:2px 0 0}
 #params-close{background:transparent;border:1px solid rgba(255,255,255,.35);color:#fff;
   width:28px;height:28px;border-radius:5px;cursor:pointer;font-size:15px;line-height:1;flex-shrink:0}
-#params-body{padding:14px 16px 16px}
+#params-body{padding:14px 16px 16px;overflow-y:auto;flex:1;-webkit-overflow-scrolling:touch}
 .pgrp{margin-bottom:16px}
 .pgrp h4{font-size:11px;font-weight:700;color:var(--g1);text-transform:uppercase;
   letter-spacing:.06em;margin:0 0 8px;padding-bottom:5px;border-bottom:1px solid var(--bd)}
@@ -59,9 +62,8 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
   font-size:13px;font-family:inherit;text-align:right}
 .prow input.mod{border-color:var(--am);background:#fffaf0;font-weight:700}
 .prow-def{font-size:10px;color:var(--ts);text-align:right;margin-top:3px}
-#params-ft{display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;
-  padding:12px 16px;border-top:1px solid var(--bd);position:sticky;bottom:0;background:#fff;
-  border-radius:0 0 var(--r) var(--r)}
+#params-ft{flex-shrink:0;display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;
+  padding:12px 16px;border-top:1px solid var(--bd);background:#fff}
 #btn-reset{background:transparent;color:rgba(255,255,255,.75);border:1px solid rgba(255,255,255,.3);
   padding:5px 10px;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit}
 #btn-reset:hover{background:rgba(255,255,255,.12);color:#fff}
@@ -922,6 +924,16 @@ const PARAMS_DEF={
   fracNocturno:30,
   precioKwh:190,     // ARS/kWh all-in. REVISAR cada 3 meses.
   porcionEvitable:60,// % de la factura realmente evitable
+  ivaPaneles:10.5,   // % alícuota reducida de los módulos FV
+  ivaGeneral:21,     // % alícuota general del resto de los componentes
+  // La HSP dice cuánta ENERGÍA llega en todo el día (ya incluye el amanecer y
+  // el atardecer, porque es la integral de la curva). Lo que no dice es en
+  // cuántas horas llega ni con qué potencia, y eso sí importa para saber si el
+  // banco alcanza a recargarse. Esta es la ventana en que la irradiancia es
+  // suficiente para cargar de verdad: siempre menor que las horas de luz.
+  horasSolUtiles:5,
+  cRateLitio:50,     // % de C que admite un banco LiFePO4 cargando
+  cRatePlomo:20,     // % de C que admite un banco AGM / Gel
 };
 const PARAMS_INFO={
   prBat:['Performance Ratio con baterías','Pérdidas globales del sistema con almacenamiento. Típico 0,70–0,78.'],
@@ -940,12 +952,19 @@ const PARAMS_INFO={
   fracNocturno:['Consumo diurno — perfil nocturno (%)',''],
   precioKwh:['Precio del kWh (ARS)','Total de la factura dividido los kWh. Revisar cada 3 meses.'],
   porcionEvitable:['Porción evitable de la factura (%)','Los cargos fijos e impuestos se siguen pagando aunque generes.'],
+  ivaPaneles:['IVA de los paneles (%)','Los módulos fotovoltaicos tributan alícuota reducida.'],
+  ivaGeneral:['IVA del resto (%)','Inversor, baterías, estructura, cableado y mano de obra.'],
+  horasSolUtiles:['Ventana de sol útil (h)','Horas con irradiancia suficiente para cargar el banco. Menos que las horas de luz: al amanecer y al atardecer el sol está muy bajo. Típico 4–6.'],
+  cRateLitio:['Corriente de carga LiFePO4 (% de C)','Cuánta corriente admite el banco cargando. 50% de C = 100 A en un banco de 200 Ah.'],
+  cRatePlomo:['Corriente de carga AGM / Gel (% de C)','Típico 10–25.'],
 };
 const PARAMS_GRUPOS=[
   ['Generación',['prBat','prGrid','wPorM2','factorTecho']],
   ['Inversor y regulador',['invSec','surge','etaInv','vmaxMppt']],
-  ['Baterías',['etaLitio','etaPlomo']],
+  ['Baterías',['etaLitio','etaPlomo','cRateLitio','cRatePlomo']],
+  ['Ventana solar',['horasSolUtiles']],
   ['Consumo',['fracDiurno','fracEquilibrado','fracNocturno','factorCarga']],
+  ['Impuestos',['ivaPaneles','ivaGeneral']],
   ['Retorno de inversión',['precioKwh','porcionEvitable']],
 ];
 const MPPT_SZ=[10,20,30,40,60,80,100,120,150];
@@ -992,7 +1011,7 @@ let S={
   voltOv:'auto',
   results:null,
   priceList:null,  // única lista de precios activa
-  tc:TC_DEFAULT,markup:20,iva:0, // markup = ex "margen"
+  tc:TC_DEFAULT,markup:20, // markup = ex "margen"
   quoteItems:[],
   proposal:'',
   proposalEdited:false,   // true si el usuario editó el texto a mano
@@ -1059,10 +1078,9 @@ function saveCurrentStep(){
     if(voltSel)S.voltOv=voltSel.value;
   }
   if(CUR===7){
-    // State already maintained live via tcChange/markupChange/ivaChange
+    // State already maintained live via tcChange/markupChange
     S.tc=parseFloat(($('tc-val')||{}).value)||S.tc;
     S.markup=parseFloat(($('markup-val')||{}).value)||S.markup;
-    S.iva=parseFloat(($('iva-val')||{}).value)||S.iva;
   }
 }
 
@@ -1207,7 +1225,7 @@ ${tip('&#128196; ¿Dónde encuentro el kWh/mes?',
       <div class="rc2-unit">kWh/a&ntilde;o</div>
     </div>
   </div>
-  <div class="alert-ok">&#9989; Consumo listo. Av&aacute; al Paso 3 para continuar el dise&ntilde;o.</div>`
+  <div class="alert-ok">&#9989; Consumo listo. Avanz&aacute; al Paso 3 para continuar el dise&ntilde;o.</div>`
   :`<div class="alert-warn">&#9888; Ingres&aacute; el consumo mensual de la factura para continuar.</div>`}
 </div>`;
 }
@@ -1233,7 +1251,7 @@ function facturaInput(val){
           <div class="rc2-val">${fa(annual)}</div>
           <div class="rc2-unit">kWh/a&ntilde;o</div></div>
       </div>
-      <div class="alert-ok">&#9989; Consumo listo. Av&aacute; al Paso 3 para continuar el dise&ntilde;o.</div>`;
+      <div class="alert-ok">&#9989; Consumo listo. Avanz&aacute; al Paso 3 para continuar el dise&ntilde;o.</div>`;
     } else {
       res.innerHTML='<div class="alert-warn">&#9888; Ingres&aacute; el consumo mensual de la factura para continuar.</div>';
     }
@@ -1366,13 +1384,22 @@ function s4(){
   <div class="step-title">&#9728; Recurso solar disponible</div>
   <div class="step-sub">Las HSP determinan cu&aacute;nta energ&iacute;a generan los paneles en esa zona.</div>
 </div>
-${tip('¿Qué son las Horas Solares Pico (HSP)?',
-  'Una HSP equivale a 1 hora de irradiancia máxima de 1.000 W/m². Normaliza la radiación variable del día a un número comparable entre zonas.',
-  `<b>Fórmula de generación:</b><br>
-  E_panel (Wh/día) = Potencia (Wp) × HSP × PR<br><br>
-  Ejemplo: Panel de 500 Wp, zona con 4,5 HSP, PR = 0,75:<br>
-  500 × 4,5 × 0,75 = <b>1.687 Wh/día ≈ 1,69 kWh/día</b><br><br>
-  <b>PR (Performance Ratio)</b>: factor de rendimiento global que agrupa pérdidas por temperatura, suciedad, cableado, MPPT y discordancia de módulos. Típicamente 0,75–0,80.<br>
+${tip('¿Qué son las Horas Solares Pico (HSP)? ¿Y el amanecer y el atardecer?',
+  'Una HSP equivale a 1 hora de irradiancia de 1.000 W/m². <b>No significa que el sol pegue fuerte sólo 4,5 horas y el resto nada:</b> es toda la energía del día, desde que sale el sol hasta que se pone, expresada como si hubiera llegado a potencia máxima.',
+  `<b>La HSP ya incluye la subida y la bajada del sol.</b> Es la integral de la curva
+  de irradiancia de todo el día dividida por 1.000 W/m²:<br>
+  HSP = energía del día (Wh/m²) ÷ 1.000 W/m²<br><br>
+  Un día que entrega 4.500 Wh/m² repartidos en una curva de 12 horas tiene 4,5 HSP.
+  La mañana temprano y la tarde aportan poco, el mediodía aporta mucho, y el total ya
+  está contado. Por eso, para calcular <b>energía diaria</b>, multiplicar por HSP es correcto.<br><br>
+  <b>Fórmula de generación:</b><br>
+  E_panel (Wh/día) = Potencia (Wp) × HSP × PR<br>
+  500 Wp × 4,5 HSP × 0,75 = <b>1.687 Wh/día</b><br><br>
+  <b>Lo que la HSP no dice</b> es en cuántas horas llega esa energía ni con qué potencia
+  instantánea. Eso importa para saber si el banco alcanza a recargarse y si la corriente
+  es admisible: se verifica en el Paso 6 con la <b>ventana de sol útil</b>, ajustable en Criterios.<br><br>
+  <b>PR (Performance Ratio)</b>: pérdidas por temperatura, suciedad, cableado, MPPT y
+  discordancia de módulos.<br>
   <b>Fuente HSP:</b> SEGEMAR/INTA para Argentina.`)}
 <div class="card">
   <div class="card-title">Zona de Argentina</div>
@@ -1693,6 +1720,27 @@ function calc(){
   // Off-grid/híbrido: se dimensiona sobre la carga nominal × 1,25.
   // On-grid: 90% de la potencia pico instalada (relación DC/AC típica 1,1-1,2).
   // Los picos de arranque son absorbidos por la capacidad surge del inversor.
+  // ── RECARGA DEL BANCO ────────────────────────────────────────────
+  // La HSP es energía diaria: ya contempla la subida y la bajada del sol,
+  // porque es la integral de la curva dividida por 1.000 W/m². Lo que NO
+  // contempla es la POTENCIA instantánea ni en cuántas horas llega esa
+  // energía, y de eso depende que el banco se recargue a tiempo y que la
+  // corriente sea admisible. Eso se verifica acá.
+  let iCargaDisp=0,iMaxBanco=0,tRecarga=0;
+  if(nBat>0){
+    iCargaDisp=(totWpInst*PR)/volt;                 // A que el FV entrega al banco
+    const cRate=(bat.chem==='LiFePO4'?P.cRateLitio:P.cRatePlomo)/100;
+    iMaxBanco=bankAh*cRate;                         // A que el banco tolera
+    const iEfectiva=Math.min(iCargaDisp,iMaxBanco);
+    tRecarga=iEfectiva>0?(bankWh*bat.DoD)/(iEfectiva*volt):0;
+    if(iCargaDisp>iMaxBanco)avisos.push('El generador puede entregar '+f1(iCargaDisp)+
+      ' A y el banco admite '+f1(iMaxBanco)+' A cargando: hay que limitar la corriente en el regulador '+
+      'o ampliar el banco, o se acorta su vida útil.');
+    if(tRecarga>P.horasSolUtiles)avisos.push('Recargar el banco desde vacío lleva '+f1(tRecarga)+
+      ' h y la ventana de sol útil es de '+P.horasSolUtiles+' h: despu\u00e9s de una descarga profunda '+
+      'no se repone en un solo d\u00eda. Convien\u00e9 m\u00e1s generaci\u00f3n, menos autonom\u00eda o aceptarlo expl\u00edcitamente.');
+  }
+
   // El pico de arranque de motores (heladeras, bombas, aire) se calculaba en
   // totWpk y se descartaba, pese a que la ayuda del Paso 2 dice que determina
   // el tamaño del inversor. Ahora manda el mayor de los dos criterios.
@@ -1746,6 +1794,7 @@ function calc(){
     panS,panP,Vmpp,Voc,hsp,hspAnual,hspPeor,critHsp,panWp,auto,bat,PR,ETA_bat,ETA_inv,batOver,cobertura,avisos,
     fracDia,whFV,whBase,cobObj,sinInyeccion,inyecta:S.inyecta,profile:S.profile,
     fracResp,whRespDia,whEsencial,respaldoFuente,areaMod,areaTecho,
+    iCargaDisp,iMaxBanco,tRecarga,horasSolUtiles:P.horasSolUtiles,
     sysType:S.sysType,consumoMode:S.consumoMode};
 }
 
@@ -1799,6 +1848,9 @@ Sin inyecci&oacute;n s&oacute;lo se aprovecha el consumo diurno, y eso cambia cu
   <div class="bat-row"><span>Capacidad del banco</span><span class="bv">${fa(R.bankAh)} Ah @ ${R.volt} V</span></div>
   <div class="bat-row"><span>Energ&iacute;a total almacenada</span><span class="bv">${fa(R.bankWh)} Wh = ${f2(R.bankKwh)} kWh</span></div>
   <div class="bat-row"><span>Energ&iacute;a &uacute;til (usable)</span><span class="bv">${f2(R.bankKwh*R.bat.DoD)} kWh</span></div>
+  <div class="bat-row"><span>Corriente de carga disponible</span><span class="bv">${f1(R.iCargaDisp)} A</span></div>
+  <div class="bat-row"><span>M&aacute;x. que admite el banco</span><span class="bv">${f1(R.iMaxBanco)} A</span></div>
+  <div class="bat-row"><span>Recarga desde vac&iacute;o</span><span class="bv">${f1(R.tRecarga)} h ${R.tRecarga<=R.horasSolUtiles?'&#10003;':'&#9888;'} (ventana &uacute;til: ${R.horasSolUtiles} h)</span></div>
   <div class="bat-formula">Ah necesarios = Wh_bruta / V_sistema<br>
 = ${fa(Math.round(R.whStore))} Wh / ${R.volt} V = ${fa(Math.round(R.whStore/R.volt))} Ah<br>
 N_paralelo = ⌈${fa(Math.round(R.whStore/R.volt))} / ${R.bat.Ah}⌉ = ${R.batP} | N_serie = ${R.volt}/${R.bat.V} = ${R.batS}<br>
@@ -1904,7 +1956,7 @@ function s7(){
   syncQuoteWithDesign(R);
   const T=quoteTotals();
   const rows=S.quoteItems.map(it=>{
-    if(it.iva===undefined)it.iva=S.iva;
+    if(it.iva===undefined)it.iva=ivaDeTipo(it.type);
     const p=parseFloat(it.price)||0,ok=p>0;
     const tot=ok?p*it.qty:0;   // neto de la fila; markup e IVA van en el pie
     const matched=it._autoMatched?` title="Auto: ${esc(it._autoMatched)}" style="border-bottom:1px dashed var(--g2)"`:' ';
@@ -1915,7 +1967,7 @@ function s7(){
   data-qid="${it.id}" oninput="qQty(this)" style="width:46px;text-align:center"></td>
 <td class="r"><input type="number" placeholder="USD" value="${it.price}"
   data-qid="${it.id}" oninput="qPrice(this)" min="0" style="width:78px"></td>
-<td class="r" style="width:56px"><input type="number" placeholder="IVA%" value="${it.iva===0?'':it.iva}"
+<td class="r" style="width:56px"><input type="number" placeholder="IVA%" value="${it.iva}"
   id="iv-${it.id}" data-qid="${it.id}" oninput="qIva(this)" min="0" max="50" style="width:52px;text-align:center"
   title="IVA individual (%)"></td>
 <td class="r mono"><span id="qt-${it.id}">${tot?'USD '+fa(Math.round(tot)):'<span style="color:#bbb">—</span>'}</span></td>
@@ -1946,9 +1998,14 @@ ${tip('Cómo usar las listas de precios y el Markup distribuidor',
     <div class="markup-note">Costo proveedor + ${S.markup}% = precio de venta</div>
   </div>
   <div class="fld">
-    <label>IVA % por defecto</label>
-    <input id="iva-val" type="number" value="${S.iva}" min="0" max="50" oninput="ivaChange(this)">
-    <div class="markup-note" style="font-size:9.5px">Se aplica a ítems nuevos. Ajust&aacute; por fila.</div>
+    <label>IVA por tipo de componente</label>
+    <div style="padding:8px 10px;border:1px solid #ccc;border-radius:7px;background:#fafafa;font-size:12px;line-height:1.5">
+      Paneles <b>${S.params.ivaPaneles}%</b> &bull; Resto <b>${S.params.ivaGeneral}%</b>
+    </div>
+    <div class="markup-note" style="font-size:9.5px">
+      Se aplica a &iacute;tems nuevos y es ajustable por fila.
+      <a href="#" onclick="event.preventDefault();openParams()" style="color:var(--g1)">Cambiar al&iacute;cuotas</a>
+    </div>
   </div>
 </div>
 <div class="pl-upload ${pl?'loaded':''}" id="pl-zone"
@@ -2119,6 +2176,11 @@ function quoteTotals(){
 // Mantiene los ítems auto-generados alineados con el dimensionado actual
 // (cantidades y descripciones), preservando precios, IVA, ítems agregados a
 // mano y nombres que el usuario haya editado.
+// Alícuota que corresponde a cada componente. Sigue siendo editable por fila:
+// esto sólo define con qué valor aparece.
+function ivaDeTipo(tipo){
+  return tipo==='panel'?S.params.ivaPaneles:S.params.ivaGeneral;
+}
 function syncQuoteWithDesign(R){
   if(!R)return;
   const want=[
@@ -2137,7 +2199,7 @@ function syncQuoteWithDesign(R){
   const extras=S.quoteItems.filter(it=>!autoTypes.has(it.type)&&it.type!=='bat'&&it.type!=='mppt');
   const out=want.map(w=>{
     const prev=S.quoteItems.find(it=>it.type===w.type);
-    if(!prev)return{...w,price:'',iva:S.iva,id:uid(),auto:true};
+    if(!prev)return{...w,price:'',iva:ivaDeTipo(w.type),id:uid(),auto:true};
     // Preservar lo que cargó el usuario; actualizar lo que depende del diseño.
     return{...prev,type:w.type,qty:w.qty,comp:prev._edited?prev.comp:w.comp,auto:true};
   });
@@ -2181,22 +2243,6 @@ function markupChange(inp){
   if(mn)mn.textContent='Costo proveedor + '+S.markup+'% = precio de venta';
   qUpdateTotals();
 }
-function ivaChange(inp){
-  const prev=S.iva;
-  S.iva=parseFloat(inp.value)||0;
-  // Actualizar sólo los ítems que tenían el IVA por defecto anterior (o sin definir)
-  // Sin llamar renderMain() para no perder el foco del campo
-  S.quoteItems.forEach(it=>{
-    if(it.iva===prev||it.iva===undefined){
-      it.iva=S.iva;
-      // Actualizar el input de IVA de esa fila si existe en el DOM
-      const ivaEl=$('iv-'+it.id);
-      if(ivaEl)ivaEl.value=S.iva===0?'':S.iva;
-    }
-  });
-  qUpdateTotals();
-}
-
 function qUpdateTotals(){
   const T=quoteTotals();
   roiRefresh();
@@ -2211,7 +2257,7 @@ function qUpdateTotals(){
   set('q-grand-ars',T.net>0?'ARS '+fa(Math.round(T.grand*S.tc)):'—');
 }
 function addQuoteRow(){
-  S.quoteItems.push({comp:'Ítem adicional',qty:1,price:'',iva:S.iva,id:uid(),type:'extra'});
+  S.quoteItems.push({comp:'Ítem adicional',qty:1,price:'',iva:S.params.ivaGeneral,id:uid(),type:'extra'});
   if(CUR===7)renderMain();
 }
 function delQuoteRow(id){
@@ -2271,7 +2317,7 @@ function autoFillPrices(){
     if(bestScore>=2&&bestProd&&bestProd.price>0){
       item.price=String(bestProd.price);
       item._autoMatched=bestProd.desc+(bestProd.code?' ['+bestProd.code+']':'');
-      if(item.iva===undefined)item.iva=S.iva;
+      if(item.iva===undefined)item.iva=ivaDeTipo(item.type);
       filled++;
     }
   });

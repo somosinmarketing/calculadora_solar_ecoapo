@@ -76,7 +76,9 @@ restaurarlos todos.
 |---|---|
 | Generación | Performance Ratio con baterías y On Grid, W/m² de módulo, factor de superficie de techo |
 | Inversor y regulador | Factor de seguridad, sobrecarga de arranque tolerada, rendimiento del inversor, tensión máx. de entrada MPPT |
-| Baterías | Round-trip LiFePO4 y AGM/Gel |
+| Baterías | Round-trip LiFePO4 y AGM/Gel, corriente de carga admisible (% de C) |
+| Ventana solar | Horas de sol útiles para recargar el banco |
+| Impuestos | IVA de los paneles (alícuota reducida) e IVA del resto |
 | Consumo | Fracción diurna por perfil, factor de carga |
 | Retorno de inversión | Precio del kWh, porción evitable de la factura |
 
@@ -92,9 +94,26 @@ son estimadas por región; para un proyecto ejecutivo conviene cargarlas a mano
 desde datos del sitio (SEGEMAR / INTA / PVGIS). El precio del kWh y la porción
 evitable mueven el repago directamente: revisarlos al menos cada 3 meses.
 
+### Sobre la HSP y las horas de sol
+
+La HSP **ya contempla el amanecer y el atardecer**: es la integral de la curva
+de irradiancia de todo el día dividida por 1.000 W/m², no "N horas a máxima
+potencia y el resto nada". Un día que entrega 4.500 Wh/m² repartidos en una
+curva de 12 horas tiene 4,5 HSP. Para calcular **energía diaria**, multiplicar
+por HSP es correcto y no subestima nada.
+
+Lo que la HSP no dice es **en cuántas horas llega esa energía**. Eso importa
+para saber si el banco alcanza a recargarse y si la corriente es admisible, y
+se verifica aparte con la ventana de sol útil y el C-rate del banco: el Paso 6
+informa la corriente de carga disponible, la que el banco tolera y el tiempo de
+recarga desde vacío, y avisa si no entra en la ventana.
+
 ### Limitaciones conocidas
 
 - El repago es **simple**: no contempla inflación, actualización de tarifas,
   financiamiento, degradación de los módulos ni mantenimiento.
 - La superficie de techo es una estimación por potencia; no considera la
   geometría real del techo, sombras ni obstáculos.
+- El solapamiento entre la curva de generación y la de consumo se aproxima con
+  la fracción diurna del perfil. Un cálculo fino de autoconsumo necesitaría
+  perfiles horarios de ambas curvas, que el simulador no maneja.
