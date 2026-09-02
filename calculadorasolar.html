@@ -830,13 +830,19 @@ const BATS=[
   {id:"lfe200-48",n:"LiFePO4 200 Ah 48 V",Ah:200,V:48,DoD:.8,chem:"LiFePO4"},
   {id:"lfe300-48",n:"LiFePO4 300 Ah 48 V",Ah:300,V:48,DoD:.8,chem:"LiFePO4"},
 ];
+// hsp = promedio anual. hspMin = peor mes (junio), que es lo que manda en un
+// sistema aislado: si el banco no se recarga en invierno, el sistema queda
+// corto justo cuando más se lo necesita. La caída invernal es más marcada
+// cuanto más al sur (menos horas de luz y sol más bajo).
+// ATENCIÓN: son valores de referencia. Para un proyecto ejecutivo hay que
+// validarlos con datos del sitio (SEGEMAR / INTA / PVGIS) y cargarlos a mano.
 const REGIONS=[
-  {id:"pata-s",n:"Patagonia Sur",z:"Santa Cruz / Tierra del Fuego",hsp:3.5},
-  {id:"pata-n",n:"Patagonia Norte",z:"Neuqu\u00e9n / R\u00edo Negro",hsp:4.0},
-  {id:"bsas",n:"Bs. As. / Litoral",z:"GBA / C\u00f3rdoba / Entre R\u00edos",hsp:4.5},
-  {id:"centro",n:"Centro",z:"San Luis / La Pampa",hsp:5.0},
-  {id:"noa",n:"NOA / Cuyo",z:"Mendoza / San Juan / Tucum\u00e1n",hsp:5.5},
-  {id:"norte",n:"Norte extremo",z:"Jujuy / Salta / Catamarca",hsp:5.8},
+  {id:"pata-s",n:"Patagonia Sur",z:"Santa Cruz / Tierra del Fuego",hsp:3.5,hspMin:1.4},
+  {id:"pata-n",n:"Patagonia Norte",z:"Neuqu\u00e9n / R\u00edo Negro",hsp:4.0,hspMin:2.0},
+  {id:"bsas",n:"Bs. As. / Litoral",z:"GBA / C\u00f3rdoba / Entre R\u00edos",hsp:4.5,hspMin:2.6},
+  {id:"centro",n:"Centro",z:"San Luis / La Pampa",hsp:5.0,hspMin:3.0},
+  {id:"noa",n:"NOA / Cuyo",z:"Mendoza / San Juan / Tucum\u00e1n",hsp:5.5,hspMin:3.6},
+  {id:"norte",n:"Norte extremo",z:"Jujuy / Salta / Catamarca",hsp:5.8,hspMin:4.2},
 ];
 const INV_SZ=[600,1000,1500,2000,3000,4000,5000,6000,8000,10000,12000,15000,20000];
 // Constantes de diseño. Los textos de ayuda las interpolan en vez de repetir
@@ -857,6 +863,17 @@ const FRAC_DIA={diurno:0.70,equilibrado:0.50,nocturno:0.30};
 // en Off Grid las baterías son la única fuente y cubren todo; en Híbrido son
 // respaldo ante cortes, donde sólo se usan las cargas esenciales.
 const RESPALDO_DEF={offgrid:1,hybrid:.5};
+// Superficie: un módulo cristalino actual ronda los 200 W por m² (eficiencia
+// ~20%), así que el área sale de la potencia. El factor de techo agrega la
+// separación entre filas y los pasillos de mantenimiento.
+const W_POR_M2=200;
+const FACTOR_TECHO=1.3;
+// Retorno de inversión. El sistema NO ahorra el 100% de lo que se paga por
+// cada kWh: los cargos fijos y buena parte de los impuestos se siguen pagando
+// aunque generes tu propia energía. Sin esta corrección el repago da la mitad
+// de lo que reporta el mercado y la herramienta prometería de más.
+const PRECIO_KWH_DEF=190;      // ARS por kWh, all-in. REVISAR cada 3 meses.
+const PORCION_EVITABLE_DEF=60; // % de la factura realmente evitable
 const MPPT_SZ=[10,20,30,40,60,80,100,120,150];
 const AUTO_OPTS=[
   {v:0,l:'Sin bater\u00edas (On Grid puro)'},
@@ -887,13 +904,17 @@ let S={
   facturaW:0,              // potencia simultánea estimada (0 = automática)
   items:[],
   profile:'equilibrado',
-  region:'bsas',hsp:4.5,
+  region:'bsas',hsp:4.5,hspMin:2.6,
+  hspCriterio:'auto',   // 'auto' | 'anual' | 'peor'
   panWp:500,
   autonomy:24,
   autonomyCustom:0,
   batId:'lfe100-48',
   sysType:'offgrid',
   inyecta:null,      // null = sin definir. Bloquea el dimensionado a propósito.
+  coberturaObj:100,  // % del consumo que cubre el FV; el resto lo aporta la red
+  precioKwh:PRECIO_KWH_DEF,
+  porcionEvitable:PORCION_EVITABLE_DEF,
   respaldo:'auto',   // 'auto' | 'esenciales' | número 0-100
   voltOv:'auto',
   results:null,
@@ -1283,17 +1304,37 @@ ${tip('¿Qué son las Horas Solares Pico (HSP)?',
 <div class="card">
   <div class="card-title">Zona de Argentina</div>
   <div class="region-grid">
-    ${REGIONS.map(r=>`<button class="rg-btn${S.region===r.id?' sel':''}" onclick="selRegion('${r.id}',${r.hsp})">
+    ${REGIONS.map(r=>`<button class="rg-btn${S.region===r.id?' sel':''}" onclick="selRegion('${r.id}')">
     <div class="rg-name">${r.n}</div>
     <div class="rg-hsp">${r.hsp} HSP</div>
-    <div class="rg-zone">${r.z}</div></button>`).join('')}
+    <div class="rg-zone">${r.z}</div>
+    <div class="rg-zone">invierno ${r.hspMin}</div></button>`).join('')}
   </div>
-  <div class="row2" style="margin-top:12px">
+  <div class="fld" style="margin-top:12px">
+    <label>Criterio de dise&ntilde;o</label>
+    <select id="hsp-crit" onchange="hspCritChange(this)">
+      <option value="auto"${S.hspCriterio==='auto'?' selected':''}>Autom&aacute;tico seg&uacute;n el tipo de sistema (recomendado)</option>
+      <option value="peor"${S.hspCriterio==='peor'?' selected':''}>Peor mes (junio) &mdash; el sistema funciona todo el a&ntilde;o</option>
+      <option value="anual"${S.hspCriterio==='anual'?' selected':''}>Promedio anual &mdash; queda corto en invierno</option>
+    </select>
+    <div class="section-note">
+      <b>Autom&aacute;tico</b> usa el peor mes en Off Grid, donde no hay red que cubra el invierno,
+      y el promedio anual cuando hay red disponible.
+      Dise&ntilde;ar un sistema aislado sobre el promedio anual lo deja corto justo en los meses
+      de menos sol; hacerlo sobre el peor mes agranda la instalaci&oacute;n y encarece la cotizaci&oacute;n.
+    </div>
+  </div>
+  <div class="row3" style="margin-top:4px">
     <div class="fld">
-      <label>HSP de dise&ntilde;o</label>
+      <label>HSP promedio anual</label>
       <input id="hsp-val" type="number" min="1" max="8" step="0.1" value="${S.hsp}"
         oninput="S.hsp=parseFloat(this.value)||4.5">
-      <div class="section-note">Ajust&aacute; manualmente si ten&eacute;s datos precisos del sitio.</div>
+    </div>
+    <div class="fld">
+      <label>HSP peor mes (junio)</label>
+      <input id="hsp-min" type="number" min="0.5" max="8" step="0.1" value="${S.hspMin}"
+        oninput="S.hspMin=parseFloat(this.value)||2.6">
+      <div class="section-note">Valor de referencia: validalo con datos del sitio.</div>
     </div>
     <div class="fld">
       <label>Potencia del panel (Wp)</label>
@@ -1304,11 +1345,15 @@ ${tip('¿Qué son las Horas Solares Pico (HSP)?',
   </div>
 </div>`;
 }
-function selRegion(id,hsp){
-  S.region=id;S.hsp=hsp;
-  document.querySelectorAll('.rg-btn').forEach(b=>b.classList.remove('sel'));
-  document.querySelectorAll('.rg-btn').forEach(b=>{if(b.textContent.includes(REGIONS.find(r=>r.id===id).n))b.classList.add('sel');});
-  const inp=$('hsp-val');if(inp)inp.value=hsp;
+function selRegion(id){
+  const r=REGIONS.find(x=>x.id===id);
+  if(!r)return;
+  S.region=id;S.hsp=r.hsp;S.hspMin=r.hspMin;
+  renderMain();   // se actualizan los dos campos de HSP y la selección
+}
+function hspCritChange(sel){
+  S.hspCriterio=sel.value;
+  saveSoon();
 }
 
 // ── STEP 5: Autonomía ──────────────────────────────────────────────────────
@@ -1344,7 +1389,7 @@ ${tip('¿Qué es la autonomía y cómo elegirla?',
 </div>
 ${S.sysType!=='offgrid'?`
 <div class="card">
-  <div class="card-title">Inyecci&oacute;n a la red</div>
+  <div class="card-title">Red el&eacute;ctrica</div>
   <div class="fld" style="max-width:340px">
     <label>&iquest;El excedente se inyecta a la red?</label>
     <select id="iny-sel" onchange="inyChange(this)">
@@ -1360,6 +1405,15 @@ ${S.sysType!=='offgrid'?`
     (<b>${S.profile}</b>, ${Math.round((FRAC_DIA[S.profile]||.5)*100)}% diurno). Lo que se genera de m&aacute;s se pierde.</div>`:''}
   ${S.inyecta===false&&S.sysType==='hybrid'?'<div class="section-note">En h&iacute;brido el excedente carga las bater&iacute;as en vez de perderse, as&iacute; que los paneles se siguen dimensionando para cubrir las 24 h.</div>':''}
   ${S.inyecta===true?'<div class="section-note">Con balance neto el excedente del d&iacute;a compensa el consumo nocturno: los paneles cubren las 24 h.</div>':''}
+  <div class="fld" style="max-width:340px;margin-top:12px">
+    <label>Cobertura solar objetivo</label>
+    <select id="cob-sel" onchange="cobChange(this)">
+      ${[100,90,80,70,60,50].map(v=>`<option value="${v}"${S.coberturaObj===v?' selected':''}>${v}% del consumo${v===100?' (sistema completo)':''}</option>`).join('')}
+    </select>
+    <div class="section-note">Con red disponible el sistema no tiene que cubrir todo:
+      lo que falta lo aporta la red. Bajar la cobertura reduce paneles e inversi&oacute;n
+      inicial${S.coberturaObj<100?', y la red cubrir&iacute;a el '+(100-S.coberturaObj)+'% restante':''}.</div>
+  </div>
 </div>`:''}
 <div class="card" id="bat-section" ${S.sysType==='ongrid'?'style="display:none"':''}>
   <div class="card-title">Bater&iacute;as y autonom&iacute;a</div>
@@ -1416,6 +1470,10 @@ function inyChange(sel){
   S.inyecta=sel.value===''?null:sel.value==='1';
   renderMain();
 }
+function cobChange(sel){
+  S.coberturaObj=parseFloat(sel.value)||100;
+  renderMain();
+}
 function respChange(sel){
   S.respaldo=sel.value==='auto'||sel.value==='esenciales'?sel.value:parseFloat(sel.value);
   saveSoon();
@@ -1452,7 +1510,13 @@ function calc(){
 
   const bat=BATS.find(b=>b.id===S.batId)||BATS[8];
   const auto=S.autonomy===-1?(S.autonomyCustom||24):S.autonomy;
-  const hsp=S.hsp,panWp=S.panWp;
+  // Criterio de irradiación. En un sistema aislado hay que diseñar sobre el
+  // peor mes o el sistema queda corto todo el invierno; con red disponible
+  // alcanza el promedio anual, porque la red cubre los meses flojos.
+  const critHsp=S.hspCriterio==='auto'?(S.sysType==='offgrid'?'peor':'anual'):S.hspCriterio;
+  const hspAnual=S.hsp,hspPeor=S.hspMin||S.hsp;
+  const hsp=critHsp==='peor'?hspPeor:hspAnual;
+  const panWp=S.panWp;
 
   // 2. System voltage (auto-detect from total load)
   const voltOv=S.voltOv==='auto'?null:parseInt(S.voltOv);
@@ -1489,7 +1553,12 @@ function calc(){
   // simultáneo con la generación, así que se dimensiona sobre la parte diurna.
   const fracDia=FRAC_DIA[S.profile]||0.50;
   const sinInyeccion=S.sysType==='ongrid'&&S.inyecta===false;
-  const whFV=sinInyeccion?totWh*fracDia:totWh;
+  // Con red disponible el sistema no tiene por qué cubrir todo el consumo: se
+  // puede dimensionar para una fracción y tomar el resto de la red. En Off Grid
+  // no hay de dónde tomar el resto, así que siempre es 100%.
+  const cobObj=S.sysType==='offgrid'?1:Math.min(Math.max(S.coberturaObj,10),100)/100;
+  const whBase=sinInyeccion?totWh*fracDia:totWh;
+  const whFV=whBase*cobObj;
   // Wp necesarios = (Wh/día a cubrir) / (PR × HSP)
   const wpNeed=whFV/(PR*hsp);
   const nPan=Math.ceil(wpNeed/panWp);
@@ -1588,12 +1657,33 @@ function calc(){
 
   // Cobertura: cuánto del consumo cubre realmente la instalación propuesta.
   const cobertura=totWh>0?whGen/totWh:0;
+  // Superficie necesaria para montar los módulos.
+  const areaMod=nPan*(panWp/W_POR_M2);
+  const areaTecho=areaMod*FACTOR_TECHO;
   return{totW,totWpk,totWh,volt,whStore,batS,batP,nBat,bankAh,bankWh,bankKwh,
     nPan,totWpInst,whGen,wpNeed,invReq,invSz,invCrit,invOver,mpptCurr,mpptSz,mpptOver,
-    panS,panP,Vmpp,Voc,hsp,panWp,auto,bat,PR,ETA_bat,batOver,cobertura,avisos,
-    fracDia,whFV,sinInyeccion,inyecta:S.inyecta,profile:S.profile,
-    fracResp,whRespDia,whEsencial,respaldoFuente,
+    panS,panP,Vmpp,Voc,hsp,hspAnual,hspPeor,critHsp,panWp,auto,bat,PR,ETA_bat,batOver,cobertura,avisos,
+    fracDia,whFV,whBase,cobObj,sinInyeccion,inyecta:S.inyecta,profile:S.profile,
+    fracResp,whRespDia,whEsencial,respaldoFuente,areaMod,areaTecho,
     sysType:S.sysType,consumoMode:S.consumoMode};
+}
+
+// ── RETORNO DE LA INVERSIÓN ────────────────────────────────────────────────
+// Sólo tiene sentido donde antes se pagaba una factura: en Off Grid no hay
+// red, así que no hay factura contra la cual comparar el ahorro.
+function calcROI(R,T){
+  if(!R||!T||T.grand<=0)return null;
+  if(R.sysType==='offgrid')return{aplica:false,motivo:'En Off Grid no hay factura previa contra la cual medir el ahorro: el sistema no reemplaza un gasto, habilita el suministro.'};
+  // Sólo se ahorra la energía que efectivamente se aprovecha: no sirve generar
+  // más de lo que se puede consumir o inyectar.
+  const utilDia=Math.min(R.whGen,R.whBase);
+  const utilAnual=utilDia*365/1000;                       // kWh/año
+  const precio=parseFloat(S.precioKwh)||0;
+  const evitable=(parseFloat(S.porcionEvitable)||0)/100;
+  const ahorroAnual=utilAnual*precio*evitable;            // ARS/año
+  const inversion=T.grand*S.tc;                           // ARS
+  const repago=ahorroAnual>0?inversion/ahorroAnual:0;
+  return{aplica:true,utilAnual,ahorroAnual,ahorroMes:ahorroAnual/12,inversion,repago,precio,evitable};
 }
 
 // ── STEP 6: Dimensionado ───────────────────────────────────────────────────
@@ -1691,6 +1781,11 @@ ${R.avisos.map(a=>`<div class="alert-warn">&#9888; ${a}</div>`).join('')}
     <div class="rc2-lbl">&#9728; Irradiaci&oacute;n</div>
     <div class="rc2-val">${R.hsp} HSP</div>
     <div class="rc2-unit">PR: ${R.PR} &bull; ${R.auto>0?R.auto+'h autonom\u00eda':'Sin bater\u00edas'}</div>
+  </div>
+  <div class="rc2">
+    <div class="rc2-lbl">&#128208; Superficie</div>
+    <div class="rc2-val">${f1(R.areaTecho)}</div>
+    <div class="rc2-unit">m&sup2; de techo &bull; m&oacute;dulos: ${f1(R.areaMod)} m&sup2;</div>
   </div>
   <div class="rc2">
     <div class="rc2-lbl">&#9889; Generaci&oacute;n estimada</div>
@@ -1836,6 +1931,75 @@ ${tip('Cómo usar las listas de precios y el Markup distribuidor',
       </tr>
     </tfoot>
   </table></div>
+</div>
+${roiHtml(R,T)}`;
+}
+
+// Las tarjetas se refrescan solas al tipear, sin rehacer el paso: un
+// renderMain() en cada tecla le sacaría el foco al campo que se está editando.
+function roiCards(roi){
+  if(!roi||!roi.aplica)return'';
+  return `<div class="res-grid" style="margin-top:4px">
+    <div class="rc2 hi">
+      <div class="rc2-lbl">Repago estimado</div>
+      <div class="rc2-val">${roi.repago>0?f1(roi.repago):'—'}</div>
+      <div class="rc2-unit">a&ntilde;os</div>
+    </div>
+    <div class="rc2">
+      <div class="rc2-lbl">Ahorro mensual</div>
+      <div class="rc2-val" style="font-size:19px">${fa(Math.round(roi.ahorroMes))}</div>
+      <div class="rc2-unit">ARS/mes (promedio)</div>
+    </div>
+    <div class="rc2">
+      <div class="rc2-lbl">Ahorro anual</div>
+      <div class="rc2-val" style="font-size:19px">${fa(Math.round(roi.ahorroAnual))}</div>
+      <div class="rc2-unit">ARS/a&ntilde;o &bull; ${fa(Math.round(roi.utilAnual))} kWh aprovechados</div>
+    </div>
+    <div class="rc2">
+      <div class="rc2-lbl">Inversi&oacute;n</div>
+      <div class="rc2-val" style="font-size:19px">${fa(Math.round(roi.inversion))}</div>
+      <div class="rc2-unit">ARS &bull; TC ${fa(S.tc)}</div>
+    </div>
+  </div>`;
+}
+function roiRefresh(){
+  const el=$('roi-cards');
+  if(el)el.innerHTML=roiCards(calcROI(S.results,quoteTotals()));
+  saveSoon();
+}
+
+// Bloque de retorno de inversión del Paso 7.
+function roiHtml(R,T){
+  if(!R)return'';
+  if(T.net<=0)return`<div class="card"><div class="card-title">&#128200; Retorno de la inversi&oacute;n</div>
+    <div class="section-note">Carg&aacute; los precios para estimar el ahorro y el repago.</div></div>`;
+  const roi=calcROI(R,T);
+  if(roi&&!roi.aplica)return`<div class="card"><div class="card-title">&#128200; Retorno de la inversi&oacute;n</div>
+    <div class="alert-warn" style="margin:0">&#9888; ${roi.motivo}</div></div>`;
+  if(!roi)return'';
+  return `
+<div class="card">
+  <div class="card-title">&#128200; Retorno de la inversi&oacute;n</div>
+  <div class="row2">
+    <div class="fld">
+      <label>Precio del kWh (ARS, con impuestos)</label>
+      <input id="roi-kwh" type="number" min="0" step="10" value="${S.precioKwh}"
+        oninput="S.precioKwh=parseFloat(this.value)||0;roiRefresh()">
+      <div class="section-note">Total de la factura dividido los kWh consumidos.</div>
+    </div>
+    <div class="fld">
+      <label>Porci&oacute;n evitable de la factura (%)</label>
+      <input id="roi-evit" type="number" min="0" max="100" step="5" value="${S.porcionEvitable}"
+        oninput="S.porcionEvitable=parseFloat(this.value)||0;roiRefresh()">
+      <div class="section-note">Los cargos fijos e impuestos se siguen pagando aunque generes.</div>
+    </div>
+  </div>
+  <div id="roi-cards">${roiCards(roi)}</div>
+  <div class="section-note" style="margin-top:8px">
+    Repago simple: no contempla inflaci&oacute;n, actualizaci&oacute;n de tarifas, financiamiento ni
+    mantenimiento. Sirve para ordenar la conversaci&oacute;n con el cliente, no como proyecci&oacute;n financiera.
+    ${R.cobertura<1?'Se cuenta s&oacute;lo la energ&iacute;a que el sistema puede aprovechar: generar de m&aacute;s no ahorra m&aacute;s.':''}
+  </div>
 </div>`;
 }
 
@@ -1951,6 +2115,7 @@ function ivaChange(inp){
 
 function qUpdateTotals(){
   const T=quoteTotals();
+  roiRefresh();
   const set=(id,v)=>{const el=$(id);if(el)el.textContent=v;};
   set('q-sub-usd',  T.net>0?'USD '+fa(Math.round(T.net)):'—');
   set('q-sub-ars',  T.net>0?'ARS '+fa(Math.round(T.net*S.tc)):'—');
@@ -2241,8 +2406,11 @@ ${R.nBat>0?`Banco de baterías: ${R.nBat} × ${R.bat.n}
 Configuración bat: ${R.batS}S × ${R.batP}P · ${R.bankAh.toLocaleString('es-AR')} Ah · ${R.bankKwh.toFixed(1)} kWh
 Autonomía:         ${R.auto} horas (${(R.auto/24).toFixed(1)} días)
 Consumo respaldado: ${Math.round(R.whRespDia)} Wh/día — ${R.respaldoFuente}
-`:'Sin banco de baterías (sistema On Grid)\n'}Irradiación zona:  ${R.hsp} HSP
+`:'Sin banco de baterías (sistema On Grid)\n'}Superficie techo:  ${R.areaTecho.toFixed(1)} m² (módulos: ${R.areaMod.toFixed(1)} m²)
+Irradiación zona:  ${R.hsp} HSP (${R.critHsp==='peor'?'peor mes — junio':'promedio anual'})
+                   Anual ${R.hspAnual} / invierno ${R.hspPeor}
 Performance Ratio: ${R.PR} (factor rendimiento global)
+${R.cobObj<1?'Cobertura solar:   '+Math.round(R.cobObj*100)+'% del consumo; el resto lo aporta la red\n':''}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ESTIMACIÓN ECONÓMICA
@@ -2254,7 +2422,17 @@ IVA:               USD ${Math.round(T.ivaAmt).toLocaleString('es-AR')}
 TOTAL ESTIMADO:    USD ${Math.round(tot).toLocaleString('es-AR')}
 Equivalente ARS:   ARS ${Math.round(tot*S.tc).toLocaleString('es-AR')}
 Tipo de cambio:    1 USD = ARS ${S.tc.toLocaleString('es-AR')}
-Precio es orientativo sujeto a disponibilidad de stock.`:'Precios pendientes de confirmación con proveedor.'}
+Precio es orientativo sujeto a disponibilidad de stock.${(()=>{
+  const roi=calcROI(R,T);
+  if(!roi||!roi.aplica)return '';
+  return `
+
+Ahorro mensual:    ARS ${Math.round(roi.ahorroMes).toLocaleString('es-AR')}
+Ahorro anual:      ARS ${Math.round(roi.ahorroAnual).toLocaleString('es-AR')} (${Math.round(roi.utilAnual).toLocaleString('es-AR')} kWh aprovechados)
+Repago estimado:   ${roi.repago.toFixed(1)} años
+Base de cálculo:   ARS ${roi.precio}/kWh, ${Math.round(roi.evitable*100)}% evitable de la factura
+Repago simple, sin inflación ni actualización de tarifas.`;
+})()}`:'Precios pendientes de confirmación con proveedor.'}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 OBSERVACIONES TÉCNICAS
@@ -2407,6 +2585,8 @@ function exportPDF(){
       ['Paneles solares',R.nPan+' \u00d7 '+R.panWp+' Wp = '+(R.totWpInst/1000).toFixed(2)+' kWp','Inversor',fa(R.invSz)+' W'],
       ['Criterio FV',R.sinInyeccion?'Consumo diurno ('+Math.round(R.fracDia*100)+'%), sin inyecci\u00f3n':'Consumo de 24 h',
        'Perfil',R.profile],
+      ['Superficie de techo',R.areaTecho.toFixed(1)+' m\u00b2 (m\u00f3dulos '+R.areaMod.toFixed(1)+' m\u00b2)',
+       'Irradiaci\u00f3n',R.hsp+' HSP ('+(R.critHsp==='peor'?'peor mes':'anual')+')'],
     ];
     if(R.nBat>0)sumRows.push(
       ['Banco bater\u00edas',R.nBat+' \u00d7 '+R.bat.n,'Config.',R.batS+'S\u00d7'+R.batP+'P = '+fa(R.bankAh)+' Ah'],

@@ -61,6 +61,19 @@ const {chromium}=cargarPlaywright();
   chk('BUG 2: neto + markup = precio de venta', Math.abs(net+mk-sale)<=1, `${net} + ${mk} = ${sale}`);
   chk('BUG 2: venta + IVA = total final', Math.abs(sale+iva-gr)<=1, `${sale} + ${iva} = ${gr}`);
 
+  // El ROI debe recalcular sin robarle el foco al campo que se está editando.
+  await pg.evaluate(()=>{S.sysType='ongrid';S.inyecta=true;S.results=calc();renderMain();});
+  await pg.fill('input[placeholder="USD"] >> nth=0','100');
+  await pg.fill('input[placeholder="USD"] >> nth=1','500');
+  const repago1=await pg.textContent('#roi-cards .rc2-val');
+  await pg.click('#roi-kwh');
+  await pg.type('#roi-kwh','0');                    // 190 -> 1900
+  const foco=await pg.evaluate(()=>document.activeElement&&document.activeElement.id);
+  chk('el campo de precio del kWh conserva el foco al tipear', foco==='roi-kwh', 'foco en: '+foco);
+  const repago2=await pg.textContent('#roi-cards .rc2-val');
+  chk('el repago se recalcula al cambiar el precio', repago1!==repago2, repago1+' -> '+repago2+' años');
+  await pg.evaluate(()=>{S.precioKwh=190;S.sysType='offgrid';S.results=calc();renderMain();});
+
   // BUG 3: el Paso 8 debe coincidir con el Paso 7
   await pg.click('#btn-next');
   const prop=await pg.textContent('#proposal-text');
