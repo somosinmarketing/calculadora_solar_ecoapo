@@ -840,6 +840,16 @@ const REGIONS=[
   {id:"norte",n:"Norte extremo",z:"Jujuy / Salta / Catamarca",hsp:5.8},
 ];
 const INV_SZ=[600,1000,1500,2000,3000,4000,5000,6000,8000,10000,12000,15000,20000];
+// Constantes de diseño. Los textos de ayuda las interpolan en vez de repetir
+// el número a mano, que era como el tip decía 0,95 mientras el cálculo usaba 0,94.
+const ETA_INV=0.94;      // rendimiento típico del inversor off-grid (IEC 62040-3)
+const SURGE=2;           // sobrecarga de arranque que tolera un inversor (~2x nominal)
+const INV_SEC=1.25;      // factor de seguridad sobre la carga nominal
+const VMAX_MPPT=150;     // tensión máxima de entrada del regulador (V)
+// Factor de carga usado para estimar la potencia simultánea a partir de la
+// energía diaria cuando se carga el consumo desde la factura. No hay forma de
+// derivar potencia de energía: es una estimación y el usuario puede corregirla.
+const FACTOR_CARGA=0.15;
 const MPPT_SZ=[10,20,30,40,60,80,100,120,150];
 const AUTO_OPTS=[
   {v:0,l:'Sin bater\u00edas (On Grid puro)'},
@@ -878,6 +888,7 @@ let S={
   project:{name:'',location:'',type:'Vivienda'},
   consumoMode:'equipos',   // 'equipos' | 'factura'
   facturaKwh:0,            // kWh/mes desde factura
+  facturaW:0,              // potencia simultánea estimada (0 = automática)
   items:[],
   profile:'equilibrado',
   region:'bsas',hsp:4.5,
@@ -1078,6 +1089,15 @@ ${tip('&#128196; ¿Dónde encuentro el kWh/mes?',
         placeholder="Se calcula automáticamente" readonly
         style="background:#f5f5f5;color:var(--ts);font-weight:700">
     </div>
+  </div>
+  <div class="fld">
+    <label>Potencia simult&aacute;nea estimada (W)</label>
+    <input id="factura-w" type="number" min="0" step="100" value="${S.facturaW||''}"
+      placeholder="${S.facturaKwh>0?'Autom\u00e1tico: '+fa((S.facturaKwh*1000/30/24)/FACTOR_CARGA)+' W':'Autom\u00e1tico'}"
+      oninput="S.facturaW=parseFloat(this.value)||0">
+    <div class="section-note">Es lo que define el tama&ntilde;o del inversor. La factura informa
+      <b>energ&iacute;a</b>, no <b>potencia</b>: dej&aacute;lo vac&iacute;o para estimarlo, o carg&aacute; la
+      potencia contratada si la conoc&eacute;s.</div>
   </div>
 </div>
 <div id="factura-result">
@@ -1364,8 +1384,12 @@ function calc(){
   if(S.consumoMode==='factura'){
     if(!S.facturaKwh||S.facturaKwh<=0)return null;
     totWh=S.facturaKwh*1000/30; // kWh/mes → Wh/día
-    totW=totWh/8;               // estimación: 8h promedio de uso
-    totWpk=totW*2;              // estimación pico: 2× para carga de factura
+    // La factura da ENERGÍA, no POTENCIA. Se estima la potencia simultánea con
+    // un factor de carga, y el usuario puede sobrescribirla en el Paso 2:
+    // dimensionar el inversor sobre un número inventado dejaba sistemas de
+    // 350 kWh/mes con inversores de 2 kW.
+    totW=S.facturaW>0?S.facturaW:(totWh/24)/FACTOR_CARGA;
+    totWpk=totW*SURGE;
   } else {
     if(!S.items.length)return null;
     S.items.forEach(it=>{
@@ -1381,7 +1405,25 @@ function calc(){
 
   // 2. System voltage (auto-detect from total load)
   const voltOv=S.voltOv==='auto'?null:parseInt(S.voltOv);
-  const volt=voltOv||(totW<=1200?12:totW<=4000?24:48);
+  let volt=voltOv||(totW<=1200?12:totW<=4000?24:48);
+  const usaBat=S.sysType!=='ongrid'&&auto>0;
+  const avisos=[];
+  // La batería tiene que poder formar el banco a la tensión del sistema.
+  // Antes, con el default de 48 V y un consumo bajo (sistema 12 V), se hacía
+  // Math.round(12/48)=0 -> Math.max(1,0)=1, proponiendo un banco de 48 V para
+  // un sistema de 12 V y sobredimensionando la capacidad varias veces.
+  if(usaBat&&bat.V>volt){
+    if(voltOv){
+      avisos.push('La bater\u00eda de '+bat.V+' V no entra en un sistema de '+volt+' V. '+
+        'Eleg\u00ed una bater\u00eda de '+volt+' V o menos, o cambi\u00e1 la tensi\u00f3n del sistema en el Paso 5.');
+    } else {
+      avisos.push('La bater\u00eda elegida es de '+bat.V+' V: se elev\u00f3 la tensi\u00f3n del sistema de '+
+        volt+' V a '+bat.V+' V para que el banco sea posible.');
+      volt=bat.V;
+    }
+  } else if(usaBat&&volt%bat.V!==0){
+    avisos.push('Con bater\u00edas de '+bat.V+' V no se arma un banco de '+volt+' V exacto.');
+  }
 
   // ── PANELS ──────────────────────────────────────────────────────
   // PR (Performance Ratio) = factor global de rendimiento del sistema:
@@ -1401,11 +1443,10 @@ function calc(){
   //   - DoD: profundidad de descarga máxima (no dañar baterías)
   //   - η_bat: eficiencia round-trip (LiFePO4 ≈ 96%, AGM/Gel ≈ 85%)
   //   - η_inv: el inversor consume AC para operar las cargas desde DC
-  let batS=0,batP=0,nBat=0,bankAh=0,bankWh=0,bankKwh=0,whStore=0;
-  if(S.sysType!=='ongrid'&&auto>0){
-    const ETA_bat=bat.chem==='LiFePO4'?0.96:0.85;
-    const ETA_inv=0.94; // eficiencia típica inversor off-grid (IEC 62040-3)
-    whStore=(totWh/24*auto)/(bat.DoD*ETA_bat*ETA_inv);
+  let batS=0,batP=0,nBat=0,bankAh=0,bankWh=0,bankKwh=0,whStore=0,batOver=0;
+  const ETA_bat=bat.chem==='LiFePO4'?0.96:0.85;
+  if(usaBat&&bat.V<=volt){
+    whStore=(totWh/24*auto)/(bat.DoD*ETA_bat*ETA_INV);
     const ahNeed=whStore/volt;
     batS=Math.max(1,Math.round(volt/bat.V));
     batP=Math.ceil(ahNeed/bat.Ah);
@@ -1413,26 +1454,49 @@ function calc(){
     bankAh=batP*bat.Ah;
     bankWh=nBat*bat.Ah*bat.V;
     bankKwh=bankWh/1000;
+    // El escalón mínimo de batería puede dejar el banco muy por encima de lo
+    // necesario. Conviene decirlo en vez de presentarlo como el tamaño justo.
+    batOver=whStore>0?bankWh/whStore:0;
+    if(batOver>=1.6)avisos.push('El banco almacena '+f1(bankWh/1000)+' kWh para una necesidad de '+
+      f1(whStore/1000)+' kWh ('+f1(batOver)+'\u00d7 lo requerido): es el escal\u00f3n m\u00ednimo con esta bater\u00eda. '+
+      'Prob\u00e1 una de menor capacidad o menor tensi\u00f3n si quer\u00e9s ajustar el costo.');
   }
 
   // ── INVERTER ─────────────────────────────────────────────────────
   // Off-grid/híbrido: se dimensiona sobre la carga nominal × 1,25.
   // On-grid: 90% de la potencia pico instalada (relación DC/AC típica 1,1-1,2).
   // Los picos de arranque son absorbidos por la capacidad surge del inversor.
-  let invReq;
+  // El pico de arranque de motores (heladeras, bombas, aire) se calculaba en
+  // totWpk y se descartaba, pese a que la ayuda del Paso 2 dice que determina
+  // el tamaño del inversor. Ahora manda el mayor de los dos criterios.
+  let invReq,invCrit;
   if(S.sysType==='ongrid'){
     invReq=Math.max(totWpInst*0.9,500);
+    invCrit='90% de la potencia FV instalada (relaci\u00f3n DC/AC t\u00edpica 1,1\u20131,2)';
   } else {
-    invReq=Math.max(totW,500)*1.25;
+    const porCarga=Math.max(totW,500)*INV_SEC;
+    const porPico=totWpk/SURGE;
+    invReq=Math.max(porCarga,porPico,500);
+    invCrit=porPico>porCarga
+      ?'limitado por el pico de arranque ('+fa(Math.round(totWpk))+' W \u00f7 '+SURGE+' de sobrecarga)'
+      :'limitado por la carga nominal ('+fa(Math.round(totW))+' W \u00d7 '+INV_SEC+')';
   }
+  // Antes, si el equipo necesario superaba la tabla se devolvía el mayor valor
+  // en silencio: pedías 182 A y te mostraba 150 A como si estuviera bien.
   const invSz=INV_SZ.find(s=>s>=invReq)||INV_SZ[INV_SZ.length-1];
+  const invOver=invReq>INV_SZ[INV_SZ.length-1];
+  if(invOver)avisos.push('El inversor necesario ('+fa(Math.round(invReq))+' W) supera el mayor de la tabla ('+
+    fa(INV_SZ[INV_SZ.length-1])+' W). Hay que repartir la carga en varios equipos.');
 
   // ── MPPT / REGULADOR DE CARGA ─────────────────────────────────────
   // Corriente de salida MPPT (hacia baterías):
   //   I_mppt_out = P_paneles / V_sistema × factor de seguridad
   //   Esta es la corriente que el regulador entrega al banco.
-  const mpptCurr=(totWpInst/volt)*1.25;
+  const mpptCurr=(totWpInst/volt)*INV_SEC;
   const mpptSz=MPPT_SZ.find(s=>s>=mpptCurr)||MPPT_SZ[MPPT_SZ.length-1];
+  const mpptOver=usaBat&&mpptCurr>MPPT_SZ[MPPT_SZ.length-1];
+  if(mpptOver)avisos.push('El regulador necesario ('+f1(mpptCurr)+' A) supera el mayor de la tabla ('+
+    MPPT_SZ[MPPT_SZ.length-1]+' A). Hay que usar varios MPPT en paralelo o subir la tensi\u00f3n del banco.');
 
   // ── CONFIGURACIÓN SERIE/PARALELO ─────────────────────────────────
   // Vmpp estimada según potencia del panel:
@@ -1441,13 +1505,15 @@ function calc(){
   // Máxima tensión MPPT: 150 V → N_series_max = floor(150 / Voc)
   const Vmpp=panWp<=200?18:panWp<=350?30:40;
   const Voc=f2(Vmpp*1.22);
-  const maxS=Math.max(1,Math.floor(150/Voc));
+  const maxS=Math.max(1,Math.floor(VMAX_MPPT/Voc));
   const panS=Math.min(nPan,maxS);
   const panP=Math.ceil(nPan/panS);
 
+  // Cobertura: cuánto del consumo cubre realmente la instalación propuesta.
+  const cobertura=totWh>0?whGen/totWh:0;
   return{totW,totWpk,totWh,volt,whStore,batS,batP,nBat,bankAh,bankWh,bankKwh,
-    nPan,totWpInst,whGen,wpNeed,invReq,invSz,mpptCurr,mpptSz,
-    panS,panP,Vmpp,Voc,hsp,panWp,auto,bat,PR,
+    nPan,totWpInst,whGen,wpNeed,invReq,invSz,invCrit,invOver,mpptCurr,mpptSz,mpptOver,
+    panS,panP,Vmpp,Voc,hsp,panWp,auto,bat,PR,ETA_bat,batOver,cobertura,avisos,
     sysType:S.sysType,consumoMode:S.consumoMode};
 }
 
@@ -1463,8 +1529,7 @@ function s6(){
   const sys={offgrid:'Off Grid',ongrid:'On Grid',hybrid:'H\u00edbrido'}[R.sysType];
   let batHtml='';
   if(R.nBat>0){
-    const ETA_bat=R.bat.chem==='LiFePO4'?0.96:0.85;
-    const ETA_inv=0.94; // eficiencia típica inversor off-grid (IEC 62040-3)
+    const ETA_bat=R.ETA_bat;
     batHtml=`
 <div class="bat-explain">
   <h4>&#128267; C&oacute;mo se dimension&oacute; el banco de bater&iacute;as</h4>
@@ -1495,14 +1560,16 @@ ${tip('Trazabilidad de fórmulas — cómo se calculó cada componente',
   Wp_necesarios = Wh_día ÷ (PR × HSP)<br>
   = ${fa(Math.round(R.totWh))} Wh ÷ (${R.PR} × ${R.hsp}) = ${fa(Math.round(R.wpNeed))} Wp → ${R.nPan} paneles × ${R.panWp} Wp<br><br>
   <b>INVERSOR:</b><br>
-  P_inv = Potencia_nominal_total × 1,25 = ${fa(Math.round(R.totW))} W × 1,25 = ${fa(Math.round(R.invReq))} W → ${fa(R.invSz)} W<br>
-  Los picos de arranque de motores los absorbe la sobrecarga del inversor, no su tamaño nominal.<br><br>
+  Se toma el mayor entre la carga nominal y el pico de arranque:<br>
+  P_inv = m\u00e1x(P_nominal × ${INV_SEC} ; P_pico ÷ ${SURGE}) = ${fa(Math.round(R.invReq))} W → ${fa(R.invSz)} W<br>
+  En este caso queda ${R.invCrit}.<br><br>
   ${R.nBat>0?`<b>BATERÍAS:</b><br>
   Wh_bruta = (Wh/día ÷ 24 × auto_h) ÷ DoD ÷ η_bat ÷ η_inv<br>
-  = (${fa(Math.round(R.totWh))} ÷ 24 × ${R.auto}) ÷ ${R.bat.DoD} ÷ ${R.bat.chem==='LiFePO4'?'0,96':'0,85'} ÷ 0,95 = ${fa(Math.round(R.whStore))} Wh<br><br>
+  = (${fa(Math.round(R.totWh))} ÷ 24 × ${R.auto}) ÷ ${R.bat.DoD} ÷ ${String(R.ETA_bat).replace('.',',')} ÷ ${String(ETA_INV).replace('.',',')} = ${fa(Math.round(R.whStore))} Wh<br><br>
   <b>MPPT:</b><br>
-  I_mppt_out = P_paneles ÷ V_bat × 1,25 = ${fa(R.totWpInst)} ÷ ${R.volt} × 1,25 = ${f1(R.mpptCurr)} A → ${R.mpptSz} A`:
+  I_mppt_out = P_paneles ÷ V_bat × ${INV_SEC} = ${fa(R.totWpInst)} ÷ ${R.volt} × ${INV_SEC} = ${f1(R.mpptCurr)} A → ${R.mpptSz} A`:
   '<b>Sin baterías</b>: sistema On Grid sin almacenamiento.'}`,'')}
+${R.avisos.map(a=>`<div class="alert-warn">&#9888; ${a}</div>`).join('')}
 <div class="res-grid">
   <div class="rc2 hi">
     <div class="rc2-lbl">&#9728; Paneles solares</div>
@@ -1533,6 +1600,11 @@ ${tip('Trazabilidad de fórmulas — cómo se calculó cada componente',
     <div class="rc2-lbl">&#9728; Irradiaci&oacute;n</div>
     <div class="rc2-val">${R.hsp} HSP</div>
     <div class="rc2-unit">PR: ${R.PR} &bull; ${R.auto>0?R.auto+'h autonom\u00eda':'Sin bater\u00edas'}</div>
+  </div>
+  <div class="rc2">
+    <div class="rc2-lbl">&#9889; Generaci&oacute;n estimada</div>
+    <div class="rc2-val">${f2(R.whGen/1000)}</div>
+    <div class="rc2-unit">kWh/d&iacute;a &bull; cubre el ${Math.round(R.cobertura*100)}% del consumo</div>
   </div>
 </div>
 ${batHtml}
