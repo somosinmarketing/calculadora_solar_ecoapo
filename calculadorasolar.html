@@ -849,7 +849,14 @@ const VMAX_MPPT=150;     // tensión máxima de entrada del regulador (V)
 // energía diaria cuando se carga el consumo desde la factura. No hay forma de
 // derivar potencia de energía: es una estimación y el usuario puede corregirla.
 const FACTOR_CARGA=0.15;
-const TC_DEFAULT=1400;   // el default y el fallback de tcChange eran distintos (1400 vs 1200)
+const TC_DEFAULT=1400;
+// Fracción del consumo que ocurre con sol, según el perfil del Paso 3. Los
+// porcentajes son los que el propio simulador explica en la ayuda de ese paso.
+const FRAC_DIA={diurno:0.70,equilibrado:0.50,nocturno:0.30};
+// Consumo durante el respaldo, por defecto y según tipo de sistema:
+// en Off Grid las baterías son la única fuente y cubren todo; en Híbrido son
+// respaldo ante cortes, donde sólo se usan las cargas esenciales.
+const RESPALDO_DEF={offgrid:1,hybrid:.5};   // el default y el fallback de tcChange eran distintos (1400 vs 1200)
 const MPPT_SZ=[10,20,30,40,60,80,100,120,150];
 const AUTO_OPTS=[
   {v:0,l:'Sin bater\u00edas (On Grid puro)'},
@@ -886,6 +893,8 @@ let S={
   autonomyCustom:0,
   batId:'lfe100-48',
   sysType:'offgrid',
+  inyecta:null,      // null = sin definir. Bloquea el dimensionado a propósito.
+  respaldo:'auto',   // 'auto' | 'esenciales' | número 0-100
   voltOv:'auto',
   results:null,
   priceList:null,  // única lista de precios activa
@@ -1025,7 +1034,7 @@ function s2Equipos(){
   return `
 ${tip('&#128161; ¿Cómo se calcula el consumo?',
   '<b>Fórmula:</b> Consumo (Wh/día) = Potencia (W) × Cantidad × Horas/día<br><br><i>Ejemplo:</i> 2 lámparas LED de 9W, 5 horas = 2 × 9 × 5 = 90 Wh/día',
-  '<b>Potencia nominal</b> = consumo continuo del equipo.<br><b>Factor de pico (pk)</b> = sobrecorriente de arranque de motores (2–3×): determina el tamaño del inversor, NO el consumo energético.<br><b>Horas de uso</b> = promedio real por día. No confundir con "horas encendido".')}
+  '<b>Potencia nominal</b> = consumo continuo del equipo.<br><b>Factor de pico (pk)</b> = sobrecorriente de arranque de motores (2–3×): determina el tamaño del inversor, NO el consumo energético.<br><b>Horas de uso</b> = promedio real por día. No confundir con "horas encendido".<br><br><b>Columna «Resp.»</b> = equipos que tienen que seguir funcionando con baterías durante un corte. Normalmente heladera, luces y conectividad; no el termotanque ni el aire. El banco de baterías se dimensiona sobre ese consumo, no sobre el total.')}
 <div class="add-bar">
   <select id="cat-sel"><option value="">— Catálogo de equipos —</option>${CAT.map(c=>`<option value="${esc(c.n)}">${esc(c.n)} (${c.w}W)</option>`).join('')}</select>
   <button class="btn btn-g btn-sm" onclick="addFromCat()">+ Agregar</button>
@@ -1037,10 +1046,11 @@ ${tip('&#128161; ¿Cómo se calcula el consumo?',
 <div class="tw">
   <table class="t">
     <thead><tr>
-      <th style="width:34%">Equipo</th>
-      <th style="width:10%">W</th>
-      <th style="width:9%">Cant.</th>
-      <th style="width:11%">H/d&iacute;a</th>
+      <th style="width:30%">Equipo</th>
+      <th style="width:9%">W</th>
+      <th style="width:8%">Cant.</th>
+      <th style="width:10%">H/d&iacute;a</th>
+      <th style="width:9%;text-align:center" title="Equipos que siguen funcionando con baterías durante un corte">Resp.</th>
       <th style="width:14%;text-align:right">Wh/d&iacute;a</th>
       <th style="width:5%"></th>
     </tr></thead>
@@ -1156,7 +1166,7 @@ function renderItems(){
   const body=$('items-body'),foot=$('items-foot'),sum=$('cons-summary');
   if(!body)return;
   if(!S.items.length){
-    body.innerHTML='<tr class="empty-row"><td colspan="6">Sin equipos. Us&aacute; el cat&aacute;logo o agrega uno personalizado.</td></tr>';
+    body.innerHTML='<tr class="empty-row"><td colspan="7">Sin equipos. Us&aacute; el cat&aacute;logo o agrega uno personalizado.</td></tr>';
     if(foot)foot.innerHTML='';if(sum)sum.innerHTML='';return;
   }
   let totWh=0;
@@ -1171,6 +1181,9 @@ function renderItems(){
   oninput="iFld(${it.id},'qty',this.value)"></td>
 <td><input type="number" value="${it.hd}" min="0" max="24" step="0.5" style="width:50px"
   oninput="iFld(${it.id},'hd',this.value)"></td>
+<td style="text-align:center"><input type="checkbox" ${it.esencial?'checked':''}
+  onchange="iEsencial(${it.id},this.checked)"
+  title="Marcalo si este equipo tiene que seguir andando con baterías"></td>
 <td class="mono" style="text-align:right"><span id="wh-${it.id}">${wh>0?fa(wh)+' Wh':'—'}</span></td>
 <td><button class="btn-del" onclick="delItem(${it.id})">&#x2715;</button></td>
 </tr>`;
@@ -1179,6 +1192,15 @@ function renderItems(){
 }
 
 // ── TABLE: TARGETED FIELD UPDATE — no DOM rebuild, focus preserved ─────────
+// Marca si el equipo sigue funcionando con baterías durante un corte.
+// De acá sale el consumo sobre el que se dimensiona el banco.
+function iEsencial(id,val){
+  const it=S.items.find(x=>x.id===id);
+  if(!it)return;
+  it.esencial=val;
+  iUpdateTotals();
+  saveSoon();
+}
 function iFld(id,field,val){
   const it=S.items.find(x=>x.id===id);if(!it)return;
   if(field==='device')it.device=val;
@@ -1194,8 +1216,10 @@ function iUpdateTotals(){
   let totWh=0;
   S.items.forEach(it=>{totWh+=it.qty*it.w*it.hd;});
   const foot=$('items-foot');
+  let whEs=0;S.items.forEach(it=>{if(it.esencial)whEs+=it.qty*it.w*it.hd;});
   if(foot)foot.innerHTML=totWh>0?`<tr class="t-total">
     <td colspan="4" style="padding:7px 8px">TOTAL DEL D&Iacute;A</td>
+    <td class="mono" style="text-align:center;font-size:11px">${whEs>0?fa(whEs)+' Wh':'—'}</td>
     <td class="mono" style="text-align:right;font-size:13px">${fa(totWh)} Wh &nbsp;|&nbsp; ${f2(totWh/1000)} kWh</td>
     <td></td></tr>`:'';
   const sum=$('cons-summary');
@@ -1216,13 +1240,14 @@ function s3(){
 <div class="step-hdr">
   <div class="step-eyebrow">Paso 3 &mdash; Perfil de consumo</div>
   <div class="step-title">&#128161; &iquest;Cu&aacute;ndo se usa la energ&iacute;a?</div>
-  <div class="step-sub">El perfil determina la proporci&oacute;n de energ&iacute;a que gestionan las bater&iacute;as.</div>
+  <div class="step-sub">Define qu&eacute; parte del consumo ocurre con sol. Se usa para dimensionar los paneles en sistemas sin inyecci&oacute;n a la red.</div>
 </div>
 ${tip('¿Cómo influye el perfil de consumo?',
   'El perfil define qué porción del consumo ocurre mientras el sol brilla (diurno) versus cuando no hay generación (nocturno).',
   `<b>Diurno</b>: ~70% del consumo entre 8:00 y 18:00. Paneles alimentan cargas directamente → banco de baterías más pequeño posible.<br><br>
   <b>Nocturno</b>: ~70% ocurre de noche. Las baterías deben almacenar toda la energía nocturna + pérdidas del ciclo carga/descarga.<br><br>
-  <b>Equilibrado</b>: distribución pareja. Criterio más conservador y recomendado para diseño por defecto.`)}
+  <b>Equilibrado</b>: distribución pareja. Criterio más conservador y recomendado para diseño por defecto.<br><br>
+  <b>Dónde impacta:</b> en sistemas On Grid <b>sin inyección</b>, los paneles se dimensionan sobre la fracción diurna, porque lo que se genera de más se pierde. Con inyección a la red o con baterías, el excedente se aprovecha y el perfil no altera el cálculo.`)}
 <div class="card">
   <div class="card-title">Seleccion&aacute; el perfil del cliente</div>
   <div class="radio-cards">
@@ -1290,6 +1315,7 @@ function selRegion(id,hsp){
 function s5(){
   const autoVal=S.autonomy;
   const isCustom=autoVal===-1;
+  let whEs=0;S.items.forEach(it=>{if(it.esencial)whEs+=it.qty*it.w*it.hd;});
   return `
 <div class="step-hdr">
   <div class="step-eyebrow">Paso 5 &mdash; Autonom&iacute;a y sistema</div>
@@ -1316,6 +1342,25 @@ ${tip('¿Qué es la autonomía y cómo elegirla?',
     <div class="rc-desc">${o.d}</div></div>`).join('')}
   </div>
 </div>
+${S.sysType!=='offgrid'?`
+<div class="card">
+  <div class="card-title">Inyecci&oacute;n a la red</div>
+  <div class="fld" style="max-width:340px">
+    <label>&iquest;El excedente se inyecta a la red?</label>
+    <select id="iny-sel" onchange="inyChange(this)">
+      <option value=""${S.inyecta===null?' selected':''}>&mdash; Definir para continuar &mdash;</option>
+      <option value="1"${S.inyecta===true?' selected':''}>S&iacute; &mdash; balance neto</option>
+      <option value="0"${S.inyecta===false?' selected':''}>No &mdash; autoconsumo</option>
+    </select>
+  </div>
+  ${S.inyecta===null?'<div class="alert-warn">&#9888; Sin esta definici&oacute;n no se puede dimensionar: cambia cu&aacute;ntos paneles hacen falta.</div>':''}
+  ${S.inyecta===false&&S.sysType==='ongrid'?`<div class="section-note">
+    Sin inyecci&oacute;n s&oacute;lo se aprovecha lo que se consume mientras hay sol: los paneles se
+    dimensionan sobre el consumo diurno seg&uacute;n el perfil del Paso 3
+    (<b>${S.profile}</b>, ${Math.round((FRAC_DIA[S.profile]||.5)*100)}% diurno). Lo que se genera de m&aacute;s se pierde.</div>`:''}
+  ${S.inyecta===false&&S.sysType==='hybrid'?'<div class="section-note">En h&iacute;brido el excedente carga las bater&iacute;as en vez de perderse, as&iacute; que los paneles se siguen dimensionando para cubrir las 24 h.</div>':''}
+  ${S.inyecta===true?'<div class="section-note">Con balance neto el excedente del d&iacute;a compensa el consumo nocturno: los paneles cubren las 24 h.</div>':''}
+</div>`:''}
 <div class="card" id="bat-section" ${S.sysType==='ongrid'?'style="display:none"':''}>
   <div class="card-title">Bater&iacute;as y autonom&iacute;a</div>
   <div class="row3">
@@ -1335,6 +1380,16 @@ ${tip('¿Qué es la autonomía y cómo elegirla?',
         <option value="48"${S.voltOv==='48'?' selected':''}>48 V DC</option>
       </select></div>
   </div>
+  <div class="fld">
+    <label>Consumo durante el respaldo</label>
+    <select id="resp-sel" onchange="respChange(this)">
+      <option value="auto"${S.respaldo==='auto'?' selected':''}>Autom&aacute;tico &mdash; ${S.sysType==='hybrid'?'50% (respaldo ante cortes)':'100% (sin red disponible)'}</option>
+      <option value="esenciales"${S.respaldo==='esenciales'?' selected':''}>S&oacute;lo las cargas marcadas en el Paso 2${whEs>0?' ('+fa(whEs)+' Wh/d\u00eda)':' \u2014 sin marcar'}</option>
+      ${[100,75,50,30].map(v=>`<option value="${v}"${S.respaldo===v?' selected':''}>${v}% del consumo habitual</option>`).join('')}
+    </select>
+    <div class="section-note">Con bater&iacute;as no se usa todo lo que se usa un d&iacute;a normal.
+      Esto define el tama&ntilde;o del banco: a menor consumo respaldado, menos bater&iacute;as.</div>
+  </div>
   <div id="custom-auto-wrap" ${!isCustom?'style="display:none"':''}>
     <div class="fld" style="max-width:200px">
       <label>Horas personalizadas</label>
@@ -1353,16 +1408,24 @@ function autChange(sel){
 }
 function selSys(v,el){
   S.sysType=v;
-  document.querySelectorAll('#main .rc').forEach(r=>r.classList.remove('sel'));
-  el.classList.add('sel');
-  const bs=$('bat-section');if(bs)bs.style.display=v==='ongrid'?'none':'';
+  // Los controles disponibles dependen del tipo de sistema (la inyección sólo
+  // aplica si hay red, el respaldo sólo si hay baterías): se re-renderiza.
+  renderMain();
+}
+function inyChange(sel){
+  S.inyecta=sel.value===''?null:sel.value==='1';
+  renderMain();
+}
+function respChange(sel){
+  S.respaldo=sel.value==='auto'||sel.value==='esenciales'?sel.value:parseFloat(sel.value);
+  saveSoon();
 }
 
 // ── CALCULATION ENGINE ─────────────────────────────────────────────────────
 // Formulas: IEC 61724 / ASHRAE 93 / PV*SOL methodology
 function calc(){
   // 1. Determine daily energy consumption (Wh/day)
-  let totWh=0,totW=0,totWpk=0;
+  let totWh=0,totW=0,totWpk=0,whEsencial=0;
   if(S.consumoMode==='factura'){
     if(!S.facturaKwh||S.facturaKwh<=0)return null;
     totWh=S.facturaKwh*1000/30; // kWh/mes → Wh/día
@@ -1378,8 +1441,14 @@ function calc(){
       totW+=it.qty*it.w;
       totWpk+=it.qty*it.w*(it.pk||1.5);
       totWh+=it.qty*it.w*it.hd;
+      if(it.esencial)whEsencial+=it.qty*it.w*it.hd;
     });
   }
+
+  // En On Grid e Híbrido el resultado depende de si el excedente se inyecta o
+  // se pierde. Sin esa definición no se dimensiona: cotizar con un supuesto no
+  // revisado es justamente lo que llevaba a diseños equivocados.
+  if(S.sysType!=='offgrid'&&S.inyecta===null)return null;
 
   const bat=BATS.find(b=>b.id===S.batId)||BATS[8];
   const auto=S.autonomy===-1?(S.autonomyCustom||24):S.autonomy;
@@ -1413,8 +1482,16 @@ function calc(){
   //   Efic. MPPT: ~2%        | Discordancia: ~1% | Efic. inversor: ~5%
   //   Total pérdidas: ~18–22% → PR = 0,75–0,80
   const PR=S.sysType==='ongrid'?0.80:0.75;
-  // Wp necesarios = (Wh/día a consumir) / (PR × HSP)
-  const wpNeed=totWh/(PR*hsp);
+  // Cuánto del consumo tiene que cubrir el generador FV.
+  // Con inyección (o con baterías que absorban el excedente) hay que producir
+  // durante las horas de sol la energía de las 24 h. Sin inyección, en cambio,
+  // lo que se genera de más se pierde: sólo sirve el consumo que ocurre en
+  // simultáneo con la generación, así que se dimensiona sobre la parte diurna.
+  const fracDia=FRAC_DIA[S.profile]||0.50;
+  const sinInyeccion=S.sysType==='ongrid'&&S.inyecta===false;
+  const whFV=sinInyeccion?totWh*fracDia:totWh;
+  // Wp necesarios = (Wh/día a cubrir) / (PR × HSP)
+  const wpNeed=whFV/(PR*hsp);
   const nPan=Math.ceil(wpNeed/panWp);
   const totWpInst=nPan*panWp;
   const whGen=totWpInst*hsp*PR; // energía real generada con esta instalación
@@ -1425,10 +1502,28 @@ function calc(){
   //   - DoD: profundidad de descarga máxima (no dañar baterías)
   //   - η_bat: eficiencia round-trip (LiFePO4 ≈ 96%, AGM/Gel ≈ 85%)
   //   - η_inv: el inversor consume AC para operar las cargas desde DC
+  // Durante el respaldo no se usa todo lo que se usa un día normal: se dejan
+  // andando las cargas esenciales. Dimensionar el banco sobre el consumo diario
+  // completo lo sobredimensionaba (y encarecía) sin necesidad.
+  let fracResp,respaldoFuente;
+  if(S.respaldo==='esenciales'&&whEsencial>0&&totWh>0){
+    fracResp=whEsencial/totWh;
+    respaldoFuente='equipos marcados como esenciales en el Paso 2';
+  } else if(typeof S.respaldo==='number'){
+    fracResp=Math.min(Math.max(S.respaldo,0),100)/100;
+    respaldoFuente=Math.round(fracResp*100)+'% del consumo habitual';
+  } else {
+    fracResp=RESPALDO_DEF[S.sysType]||1;
+    respaldoFuente=(S.sysType==='hybrid'
+      ?'50% del consumo (respaldo ante cortes, valor por defecto)'
+      :'100% del consumo (sin red, valor por defecto)');
+  }
+  const whRespDia=totWh*fracResp;
+
   let batS=0,batP=0,nBat=0,bankAh=0,bankWh=0,bankKwh=0,whStore=0,batOver=0;
   const ETA_bat=bat.chem==='LiFePO4'?0.96:0.85;
   if(usaBat&&bat.V<=volt){
-    whStore=(totWh/24*auto)/(bat.DoD*ETA_bat*ETA_INV);
+    whStore=(whRespDia/24*auto)/(bat.DoD*ETA_bat*ETA_INV);
     const ahNeed=whStore/volt;
     batS=Math.max(1,Math.round(volt/bat.V));
     batP=Math.ceil(ahNeed/bat.Ah);
@@ -1496,6 +1591,8 @@ function calc(){
   return{totW,totWpk,totWh,volt,whStore,batS,batP,nBat,bankAh,bankWh,bankKwh,
     nPan,totWpInst,whGen,wpNeed,invReq,invSz,invCrit,invOver,mpptCurr,mpptSz,mpptOver,
     panS,panP,Vmpp,Voc,hsp,panWp,auto,bat,PR,ETA_bat,batOver,cobertura,avisos,
+    fracDia,whFV,sinInyeccion,inyecta:S.inyecta,profile:S.profile,
+    fracResp,whRespDia,whEsencial,respaldoFuente,
     sysType:S.sysType,consumoMode:S.consumoMode};
 }
 
@@ -1506,6 +1603,11 @@ function s6(){
 <div class="step-hdr"><div class="step-eyebrow">Paso 6</div>
 <div class="step-title">&#128202; Resultados del dise&ntilde;o</div></div>
 <div class="alert-warn">&#9888; ${S.consumoMode==='factura'?'Ingres\u00e1 el consumo mensual en el Paso 2.':'Agrega equipos en el Paso 2 para ver el dimensionado.'}</div>`;
+  if(S.sysType!=='offgrid'&&S.inyecta===null)return `
+<div class="step-hdr"><div class="step-eyebrow">Paso 6</div>
+<div class="step-title">&#128202; Resultados del dise&ntilde;o</div></div>
+<div class="alert-warn">&#9888; Volv&eacute; al <b>Paso 5</b> y defin&iacute; si el sistema inyecta el excedente a la red.
+Sin inyecci&oacute;n s&oacute;lo se aprovecha el consumo diurno, y eso cambia cu&aacute;ntos paneles hacen falta.</div>`;
   const R=calc();S.results=R;
   if(!R)return'<div class="alert-warn">&#9888; Verific\u00e1 los datos de consumo.</div>';
   const sys={offgrid:'Off Grid',ongrid:'On Grid',hybrid:'H\u00edbrido'}[R.sysType];
@@ -1517,6 +1619,8 @@ function s6(){
   <h4>&#128267; C&oacute;mo se dimension&oacute; el banco de bater&iacute;as</h4>
   <div class="bat-row"><span>Tipo de bater&iacute;a seleccionada</span><span class="bv">${R.bat.n}</span></div>
   <div class="bat-row"><span>Autonom&iacute;a requerida</span><span class="bv">${R.auto} h = ${f2(R.auto/24)} d&iacute;as</span></div>
+  <div class="bat-row"><span>Consumo respaldado</span><span class="bv">${fa(Math.round(R.whRespDia))} Wh/d&iacute;a (${Math.round(R.fracResp*100)}%)</span></div>
+  <div class="bat-row"><span>Criterio de respaldo</span><span class="bv" style="font-size:11px;text-transform:none">${R.respaldoFuente}</span></div>
   <div class="bat-row"><span>Energ&iacute;a a almacenar (bruta)</span><span class="bv">${fa(Math.round(R.whStore))} Wh</span></div>
   <div class="bat-row"><span>DoD m&aacute;x. (${R.bat.chem})</span><span class="bv">${R.bat.DoD*100}%</span></div>
   <div class="bat-row"><span>Eficiencia bat. round-trip</span><span class="bv">${ETA_bat*100}%</span></div>
@@ -1538,15 +1642,21 @@ E (Wh) = ${R.nBat} × ${R.bat.Ah} Ah × ${R.bat.V} V = ${fa(R.bankWh)} Wh</div>
 </div>
 ${tip('Trazabilidad de fórmulas — cómo se calculó cada componente',
   `<b>PANELES:</b><br>
-  Wp_necesarios = Wh_día ÷ (PR × HSP)<br>
-  = ${fa(Math.round(R.totWh))} Wh ÷ (${R.PR} × ${R.hsp}) = ${fa(Math.round(R.wpNeed))} Wp → ${R.nPan} paneles × ${R.panWp} Wp<br><br>
+  ${R.sinInyeccion
+    ?`Sin inyección sólo sirve el consumo diurno (perfil <b>${R.profile}</b> = ${Math.round(R.fracDia*100)}%):<br>
+  Wh_a_cubrir = ${fa(Math.round(R.totWh))} × ${String(R.fracDia).replace('.',',')} = ${fa(Math.round(R.whFV))} Wh<br>`
+    :`Hay que producir durante las horas de sol la energía de las 24 h:<br>
+  Wh_a_cubrir = ${fa(Math.round(R.whFV))} Wh<br>`}
+  Wp_necesarios = Wh_a_cubrir ÷ (PR × HSP)<br>
+  = ${fa(Math.round(R.whFV))} ÷ (${R.PR} × ${R.hsp}) = ${fa(Math.round(R.wpNeed))} Wp → ${R.nPan} paneles × ${R.panWp} Wp<br><br>
   <b>INVERSOR:</b><br>
   Se toma el mayor entre la carga nominal y el pico de arranque:<br>
   P_inv = m\u00e1x(P_nominal × ${INV_SEC} ; P_pico ÷ ${SURGE}) = ${fa(Math.round(R.invReq))} W → ${fa(R.invSz)} W<br>
   En este caso queda ${R.invCrit}.<br><br>
   ${R.nBat>0?`<b>BATERÍAS:</b><br>
-  Wh_bruta = (Wh/día ÷ 24 × auto_h) ÷ DoD ÷ η_bat ÷ η_inv<br>
-  = (${fa(Math.round(R.totWh))} ÷ 24 × ${R.auto}) ÷ ${R.bat.DoD} ÷ ${String(R.ETA_bat).replace('.',',')} ÷ ${String(ETA_INV).replace('.',',')} = ${fa(Math.round(R.whStore))} Wh<br><br>
+  Se dimensiona sobre el consumo respaldado (${R.respaldoFuente}), no sobre el total:<br>
+  Wh_bruta = (Wh_respaldo ÷ 24 × auto_h) ÷ DoD ÷ η_bat ÷ η_inv<br>
+  = (${fa(Math.round(R.whRespDia))} ÷ 24 × ${R.auto}) ÷ ${R.bat.DoD} ÷ ${String(R.ETA_bat).replace('.',',')} ÷ ${String(ETA_INV).replace('.',',')} = ${fa(Math.round(R.whStore))} Wh<br><br>
   <b>MPPT:</b><br>
   I_mppt_out = P_paneles ÷ V_bat × ${INV_SEC} = ${fa(R.totWpInst)} ÷ ${R.volt} × ${INV_SEC} = ${f1(R.mpptCurr)} A → ${R.mpptSz} A`:
   '<b>Sin baterías</b>: sistema On Grid sin almacenamiento.'}`,'')}
@@ -1585,7 +1695,7 @@ ${R.avisos.map(a=>`<div class="alert-warn">&#9888; ${a}</div>`).join('')}
   <div class="rc2">
     <div class="rc2-lbl">&#9889; Generaci&oacute;n estimada</div>
     <div class="rc2-val">${f2(R.whGen/1000)}</div>
-    <div class="rc2-unit">kWh/d&iacute;a &bull; cubre el ${Math.round(R.cobertura*100)}% del consumo</div>
+    <div class="rc2-unit">kWh/d&iacute;a &bull; cubre el ${Math.round(R.cobertura*100)}% del consumo${R.sinInyeccion?'<br>Sin inyecci&oacute;n: la red cubre el resto':''}</div>
   </div>
 </div>
 ${batHtml}
@@ -2118,18 +2228,19 @@ CONSUMO ESTIMADO
 Consumo diario:      ${(R.totWh/1000).toFixed(2)} kWh/día
 Consumo mensual:     ${Math.round(R.totWh*30/1000)} kWh/mes
 Potencia instalada:  ${R.totW.toLocaleString('es-AR')} W (nominal)
-Perfil de consumo:   ${S.profile}
+Perfil de consumo:   ${S.profile} (${Math.round(R.fracDia*100)}% diurno)
 Modo de carga:       ${S.consumoMode==='factura'?'Desde factura ('+S.facturaKwh+' kWh/mes)':'Por equipos'}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SISTEMA RECOMENDADO
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Paneles solares:   ${R.nPan} × ${R.panWp} Wp = ${(R.totWpInst/1000).toFixed(2)} kWp
+${R.sysType!=='offgrid'?'Inyección a red:   '+(R.inyecta?'Sí (balance neto)':'No (autoconsumo)')+'\n':''}${R.sinInyeccion?'Criterio FV:       cubre el consumo diurno ('+Math.round(R.fracDia*100)+'%); la red cubre el resto\n':'Criterio FV:       cubre el consumo de 24 h\n'}Paneles solares:   ${R.nPan} × ${R.panWp} Wp = ${(R.totWpInst/1000).toFixed(2)} kWp
 Configuración:     ${R.panS}S × ${R.panP}P · Vmpp ~${R.Vmpp}V · Voc ~${R.Voc}V
 Inversor:          ${R.invSz.toLocaleString('es-AR')} W
 ${R.nBat>0?`Banco de baterías: ${R.nBat} × ${R.bat.n}
 Configuración bat: ${R.batS}S × ${R.batP}P · ${R.bankAh.toLocaleString('es-AR')} Ah · ${R.bankKwh.toFixed(1)} kWh
 Autonomía:         ${R.auto} horas (${(R.auto/24).toFixed(1)} días)
+Consumo respaldado: ${Math.round(R.whRespDia)} Wh/día — ${R.respaldoFuente}
 `:'Sin banco de baterías (sistema On Grid)\n'}Irradiación zona:  ${R.hsp} HSP
 Performance Ratio: ${R.PR} (factor rendimiento global)
 
@@ -2294,10 +2405,13 @@ function exportPDF(){
     const sumRows=[
       ['Consumo total/d\u00eda',(R.totWh/1000).toFixed(2)+' kWh/d\u00eda','Irradiaci\u00f3n',R.hsp+' HSP / PR='+R.PR],
       ['Paneles solares',R.nPan+' \u00d7 '+R.panWp+' Wp = '+(R.totWpInst/1000).toFixed(2)+' kWp','Inversor',fa(R.invSz)+' W'],
+      ['Criterio FV',R.sinInyeccion?'Consumo diurno ('+Math.round(R.fracDia*100)+'%), sin inyecci\u00f3n':'Consumo de 24 h',
+       'Perfil',R.profile],
     ];
     if(R.nBat>0)sumRows.push(
       ['Banco bater\u00edas',R.nBat+' \u00d7 '+R.bat.n,'Config.',R.batS+'S\u00d7'+R.batP+'P = '+fa(R.bankAh)+' Ah'],
       ['Energ\u00eda banco',fa(R.bankWh)+' Wh = '+R.bankKwh.toFixed(1)+' kWh','Autonom\u00eda',R.auto+' h = '+(R.auto/24).toFixed(1)+' d\u00edas'],
+      ['Consumo respaldado',fa(Math.round(R.whRespDia))+' Wh/d\u00eda ('+Math.round(R.fracResp*100)+'%)','Criterio',R.respaldoFuente],
     );
     doc.autoTable({startY:y,body:sumRows,margin:{left:ML,right:MR},
       styles:{fontSize:8.5,cellPadding:2.8},

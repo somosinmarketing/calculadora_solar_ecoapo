@@ -34,7 +34,7 @@ commiteá el cambio acá: es lo que permite revertir si algo sale mal.
 ## Tests
 
 ```bash
-node tests/unit.js     # motor de dimensionado y totales de la cotización
+node tests/unit.js     # motor de dimensionado, respaldo, inyección y totales
 node tests/smoke.js    # recorrido end-to-end en Chromium (requiere playwright)
 ```
 
@@ -49,9 +49,12 @@ las interpolan, para que la fórmula que se muestra sea siempre la que se usa.
 
 | Concepto | Criterio |
 |---|---|
-| Paneles | `Wp = Wh_día ÷ (PR × HSP)`, con PR 0,80 on-grid y 0,75 con baterías |
+| Paneles | `Wp = Wh_a_cubrir ÷ (PR × HSP)`, con PR 0,80 on-grid y 0,75 con baterías |
+| Energía a cubrir | Consumo de 24 h con inyección o con baterías; sólo la fracción diurna en On Grid sin inyección |
+| Fracción diurna | Según el perfil del Paso 3: diurno 70%, equilibrado 50%, nocturno 30% |
 | Inversor | mayor entre `P_nominal × 1,25` y `P_pico ÷ 2` (sobrecarga de arranque) |
-| Baterías | `Wh = (Wh_día ÷ 24 × horas) ÷ DoD ÷ η_bat ÷ η_inv`, η_inv = 0,94 |
+| Baterías | `Wh = (Wh_respaldo ÷ 24 × horas) ÷ DoD ÷ η_bat ÷ η_inv`, η_inv = 0,94 |
+| Consumo respaldado | Cargas marcadas como esenciales, o un porcentaje. Por defecto 100% en Off Grid y 50% en Híbrido |
 | MPPT | `I = P_paneles ÷ V_sistema × 1,25` |
 | Cotización | markup sobre el costo neto; IVA sobre el precio de venta |
 
@@ -60,8 +63,8 @@ las interpolan, para que la fórmula que se muestra sea siempre la que se usa.
 - El dimensionado usa la **HSP promedio anual**. Para sistemas off-grid lo
   correcto es diseñar sobre el peor mes (junio), o el sistema queda corto en
   invierno. No está implementado.
-- El modo **híbrido** se calcula igual que off-grid: no considera el aporte de
-  la red.
+- El modo **híbrido** dimensiona los paneles igual que off-grid: no descuenta
+  el aporte de la red al consumo diurno.
 - No calcula retorno de inversión, ahorro mensual ni superficie de techo.
 - El consumo por factura estima la potencia simultánea con un factor de carga;
   es una estimación y conviene cargar la potencia real cuando se conoce.
