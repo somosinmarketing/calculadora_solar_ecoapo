@@ -33,6 +33,9 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
   border-radius:5px;font-size:11px;font-weight:700;cursor:pointer}
 #btn-scorm-done:disabled{background:#888;color:#aaa;cursor:not-allowed}
 #scorm-time{font-size:10px;color:rgba(255,255,255,.5)}
+#btn-reset{background:transparent;color:rgba(255,255,255,.75);border:1px solid rgba(255,255,255,.3);
+  padding:5px 10px;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit}
+#btn-reset:hover{background:rgba(255,255,255,.12);color:#fff}
 
 /* ── STEPPER ──────────────────────────────────────────────────── */
 #stepper{background:#fff;border-bottom:1px solid var(--bd);padding:0;overflow-x:auto;
@@ -347,6 +350,7 @@ input,select,textarea{font-size:max(16px,1em)}
   </div>
   <div style="display:flex;align-items:center;gap:10px">
     <span id="scorm-time">0:00</span>
+    <button id="btn-reset" onclick="resetAll()" title="Borrar todo y empezar un proyecto nuevo">Nuevo</button>
     <button id="btn-scorm-done" disabled onclick="scormComplete()">&#10003; Marcar completo</button>
   </div>
 </div>
@@ -850,6 +854,7 @@ const VMAX_MPPT=150;     // tensión máxima de entrada del regulador (V)
 // energía diaria cuando se carga el consumo desde la factura. No hay forma de
 // derivar potencia de energía: es una estimación y el usuario puede corregirla.
 const FACTOR_CARGA=0.15;
+const TC_DEFAULT=1400;   // el default y el fallback de tcChange eran distintos (1400 vs 1200)
 const MPPT_SZ=[10,20,30,40,60,80,100,120,150];
 const AUTO_OPTS=[
   {v:0,l:'Sin bater\u00edas (On Grid puro)'},
@@ -900,8 +905,7 @@ let S={
   voltOv:'auto',
   results:null,
   priceList:null,  // única lista de precios activa
-  activePL:0,
-  tc:1400,markup:20,iva:0, // markup = ex "margen"
+  tc:TC_DEFAULT,markup:20,iva:0, // markup = ex "margen"
   quoteItems:[],
   proposal:'',
   proposalEdited:false,   // true si el usuario editó el texto a mano
@@ -936,6 +940,7 @@ function goTo(n){
   if(n<1||n>TOTAL)return;
   saveCurrentStep();
   CUR=n;
+  saveState();
   renderMain();
   renderStepper();
   window.scrollTo({top:0,behavior:'smooth'});
@@ -1015,14 +1020,13 @@ ${tip('&#128161; ¿Para qué sirven estos datos?',
 // ── STEP 2: Consumos ───────────────────────────────────────────────────────
 function s2(){
   const isFactura=S.consumoMode==='factura';
-  const totWh=S.items.reduce((t,it)=>t+it.qty*it.w*it.hd,0);
   return `
 <div class="step-hdr">
   <div class="step-eyebrow">Paso 2 &mdash; Tabla de consumos</div>
   <div class="step-title">&#9889; &iquest;Cu&aacute;nta energ&iacute;a se usa?</div>
   <div class="step-sub">Elegí cómo ingresar el consumo: por equipos o desde la factura.</div>
 </div>
-<div id="motiv-msg" class="motivation"><span class="mi">&#127775;</span>${MOTIV[1]||''}</div>
+<div id="motiv-msg" class="motivation"><span class="mi">&#127775;</span>${MOTIV[2]}</div>
 <div class="mode-toggle">
   <button class="mode-btn${!isFactura?' active':''}" onclick="setConsumoMode('equipos')">
     &#128295; Modo A &mdash; Por equipos
@@ -1233,7 +1237,7 @@ function s3(){
   <div class="step-title">&#128161; &iquest;Cu&aacute;ndo se usa la energ&iacute;a?</div>
   <div class="step-sub">El perfil determina la proporci&oacute;n de energ&iacute;a que gestionan las bater&iacute;as.</div>
 </div>
-<div id="motiv-msg" class="motivation"><span class="mi">&#9889;</span>${MOTIV[2]}</div>
+<div id="motiv-msg" class="motivation"><span class="mi">&#9889;</span>${MOTIV[3]}</div>
 ${tip('¿Cómo influye el perfil de consumo?',
   'El perfil define qué porción del consumo ocurre mientras el sol brilla (diurno) versus cuando no hay generación (nocturno).',
   `<b>Diurno</b>: ~70% del consumo entre 8:00 y 18:00. Paneles alimentan cargas directamente → banco de baterías más pequeño posible.<br><br>
@@ -1263,7 +1267,7 @@ function s4(){
   <div class="step-title">&#9728; Recurso solar disponible</div>
   <div class="step-sub">Las HSP determinan cu&aacute;nta energ&iacute;a generan los paneles en esa zona.</div>
 </div>
-<div id="motiv-msg" class="motivation"><span class="mi">&#128161;</span>${MOTIV[3]}</div>
+<div id="motiv-msg" class="motivation"><span class="mi">&#128161;</span>${MOTIV[4]}</div>
 ${tip('¿Qué son las Horas Solares Pico (HSP)?',
   'Una HSP equivale a 1 hora de irradiancia máxima de 1.000 W/m². Normaliza la radiación variable del día a un número comparable entre zonas.',
   `<b>Fórmula de generación:</b><br>
@@ -1313,7 +1317,7 @@ function s5(){
   <div class="step-title">&#128267; Dise&ntilde;o del sistema</div>
   <div class="step-sub">Define el tipo de instalaci&oacute;n y las horas de reserva energ&eacute;tica.</div>
 </div>
-<div id="motiv-msg" class="motivation"><span class="mi">&#9728;</span>${MOTIV[4]}</div>
+<div id="motiv-msg" class="motivation"><span class="mi">&#9728;</span>${MOTIV[5]}</div>
 ${tip('¿Qué es la autonomía y cómo elegirla?',
   'Autonomía = horas que el sistema funciona con energía almacenada, sin generación solar.',
   `<b>Criterios de selección:</b><br>
@@ -1554,7 +1558,7 @@ E (Wh) = ${R.nBat} × ${R.bat.Ah} Ah × ${R.bat.V} V = ${fa(R.bankWh)} Wh</div>
   <div class="step-title">&#128202; Tu sistema: <em>${sys}</em></div>
   <div class="step-sub">Componentes calculados seg&uacute;n datos ingresados. PR = ${R.PR} (factor de rendimiento global).</div>
 </div>
-<div id="motiv-msg" class="motivation show"><span class="mi">&#128293;</span>${MOTIV[5]}</div>
+<div id="motiv-msg" class="motivation show"><span class="mi">&#128293;</span>${MOTIV[6]}</div>
 ${tip('Trazabilidad de fórmulas — cómo se calculó cada componente',
   `<b>PANELES:</b><br>
   Wp_necesarios = Wh_día ÷ (PR × HSP)<br>
@@ -1659,9 +1663,9 @@ function s7(){
   <div class="step-title">&#128181; Precio del sistema</div>
   <div class="step-sub">Carg&aacute; precios y obten&eacute; la cotizaci&oacute;n en USD y ARS.</div>
 </div>
-<div id="motiv-msg" class="motivation"><span class="mi">&#128267;</span>${MOTIV[6]}</div>
+<div id="motiv-msg" class="motivation"><span class="mi">&#128267;</span>${MOTIV[7]}</div>
 ${tip('Cómo usar las listas de precios y el Markup distribuidor',
-  'Cargá hasta 4 listas de precios (CSV, XLSX, TSV, TXT) de distintos proveedores. El sistema detecta las columnas automáticamente.',
+  'Cargá la lista de precios de tu proveedor (CSV, XLSX, TSV o TXT). El sistema detecta las columnas automáticamente y completa los precios que puede.',
   `<b>Markup distribuidor:</b> porcentaje que se agrega al costo del proveedor para obtener el precio de venta.<br>
   <b>Fórmula:</b> Precio venta = Costo proveedor × (1 + Markup/100)<br><br>
   Ejemplo: USD 1.000 de costo + 30% markup = USD 1.300 precio de venta.<br><br>
@@ -1830,7 +1834,7 @@ function qPrice(inp){
   qRowCells(id);qUpdateTotals();
 }
 function tcChange(inp){
-  S.tc=parseFloat(inp.value)||1200;
+  S.tc=parseFloat(inp.value)||TC_DEFAULT;
   S.quoteItems.forEach(it=>qRowCells(it.id));
   qUpdateTotals();
   const mn=$('markup-val');
@@ -1938,7 +1942,6 @@ function autoFillPrices(){
   });
   return filled;
 }
-function activatePL(i){/* single provider - no tabs */}
 function triggerAutoFill(){
   const hasPL=S.priceList&&S.priceList.items&&S.priceList.items.length>0;
   if(!hasPL){alert('Primero cargá al menos una lista de precios en el panel de arriba.');return;}
@@ -1982,12 +1985,9 @@ function loadPriceList(e){
       // Reset file input so same file can be reloaded
       if(e.target)e.target.value='';
       const filled=autoFillPrices();
-      if(CUR===7){renderMain();if(filled>0){setTimeout(()=>{
-        const bar=document.createElement('div');
-        bar.className='alert-ok';bar.style.cssText='position:fixed;bottom:80px;right:14px;z-index:999;max-width:280px;animation:fadeIn .3s';
-        bar.innerHTML='&#9989; '+filled+' ítem'+(filled>1?'s':'')+ ' con precio auto-completado desde la lista';
-        document.body.appendChild(bar);setTimeout(()=>bar.remove(),4000);
-      },200);}}
+      saveState();
+      if(CUR===7){renderMain();if(filled>0){setTimeout(()=>toast(
+        '&#9989; '+filled+' ítem'+(filled>1?'s':'')+' con precio auto-completado desde la lista'),200);}}
     } catch(err){
       alert('Error al procesar el archivo:\n'+err.message+'\n\nTips:\n• CSV: columnas separadas por coma o punto y coma\n• XLSX: un solo encabezado de columnas\n• Verificá que las columnas incluyan descripción y precio');
     }
@@ -2192,7 +2192,7 @@ Energía Solar Fotovoltaica · Argentina 2025`;
   <div class="step-title">&#128196; Propuesta lista para el cliente</div>
   <div class="step-sub">Propuesta profesional generada autom&aacute;ticamente. Pod&eacute;s editarla antes de entregar.</div>
 </div>
-<div id="motiv-msg" class="motivation show"><span class="mi">&#128196;</span>${MOTIV[7]}</div>
+<div id="motiv-msg" class="motivation show"><span class="mi">&#128196;</span>${MOTIV[8]}</div>
 ${tip('¿Cómo presentar una propuesta profesional?',
   'Una buena propuesta técnica transmite confianza, claridad y profesionalismo.',
   `<b>Elementos clave:</b><br>
@@ -2246,7 +2246,7 @@ function s9(){
   <div class="step-title">&#127942; Descarg&aacute; tu propuesta</div>
   <div class="step-sub">Generá el PDF profesional para entregar al cliente.</div>
 </div>
-<div id="motiv-msg" class="motivation show"><span class="mi">&#127942;</span>${MOTIV[8]}</div>
+<div id="motiv-msg" class="motivation show"><span class="mi">&#127942;</span>${MOTIV[9]}</div>
 <div class="card" style="text-align:center;padding:28px">
   <div style="font-size:48px;margin-bottom:12px">&#128203;</div>
   <div style="font-size:16px;font-weight:700;color:var(--g1);margin-bottom:6px">
@@ -2415,6 +2415,48 @@ function exportPDF(){
   doc.save(fn);
 }
 
+// ── AVISO FLOTANTE ─────────────────────────────────────────────────────────
+function toast(html,ms){
+  const bar=document.createElement('div');
+  bar.className='alert-ok';
+  bar.style.cssText='position:fixed;bottom:80px;right:14px;z-index:999;max-width:280px;animation:fadeIn .3s';
+  bar.innerHTML=html;
+  document.body.appendChild(bar);
+  setTimeout(()=>bar.remove(),ms||4000);
+}
+
+// ── PERSISTENCIA ───────────────────────────────────────────────────────────
+// Son 9 pasos de carga manual: recargar la página, quedarse sin batería o
+// bloquear el teléfono borraba todo el trabajo. El estado vive en el navegador
+// del usuario; no se envía a ningún lado.
+const LS_KEY='ecoapo-sim-v1';
+let saveT=null;
+function saveState(){
+  try{
+    const {results,...rest}=S;   // results se recalcula solo, no se guarda
+    localStorage.setItem(LS_KEY,JSON.stringify({v:1,S:rest,CUR,iid}));
+  }catch(e){/* navegación privada o storage lleno: se sigue sin persistir */}
+}
+function saveSoon(){clearTimeout(saveT);saveT=setTimeout(saveState,400);}
+function loadState(){
+  try{
+    const raw=localStorage.getItem(LS_KEY);
+    if(!raw)return false;
+    const d=JSON.parse(raw);
+    if(!d||d.v!==1||!d.S)return false;
+    Object.assign(S,d.S);   // los campos que no estén guardados quedan en su default
+    S.results=null;
+    CUR=Math.min(Math.max(parseInt(d.CUR)||1,1),TOTAL);
+    iid=parseInt(d.iid)||0;
+    return true;
+  }catch(e){return false;}
+}
+function resetAll(){
+  if(!confirm('\u00bfEmpezar un proyecto nuevo?\n\nSe borran todos los datos cargados.'))return;
+  try{localStorage.removeItem(LS_KEY);}catch(e){}
+  location.reload();
+}
+
 // ── TIP HELPER ─────────────────────────────────────────────────────────────
 function tip(title,body,extra){
   return `<div class="tip" onclick="toggleTip(this)">
@@ -2426,7 +2468,10 @@ function toggleTip(el){
   const open=el.classList.toggle('open');
   el.querySelector('.tip-toggle').textContent=open?'\u2212':'\u002B';
 }
-const esc=s=>String(s||'').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+// El & tiene que ir primero o se re-escapan las entidades ya generadas.
+// Sin esto, un cliente "García & Hijos" rompía la propuesta.
+const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;')
+  .replace(/</g,'&lt;').replace(/>/g,'&gt;');
 const escHtml=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
 // ── SCORM ──────────────────────────────────────────────────────────────────
@@ -2446,6 +2491,8 @@ function scormComplete(){
   sc2('LMSCommit',[]);
   $('btn-scorm-done').disabled=true;
   $('btn-scorm-done').textContent='\u2713 Completado';
+  const m=$('motiv-msg');
+  if(m){m.innerHTML='<span class="mi">&#127942;</span>'+MOTIV[10];m.classList.add('show');}
 }
 
 // ── INIT ───────────────────────────────────────────────────────────────────
@@ -2466,9 +2513,15 @@ function scormComplete(){
     const el=Date.now()-t0;
     const el_=$('scorm-time');if(el_)el_.textContent=fmt(el);
   },1000);
-  S.items=[];
+  const restaurado=loadState();
+  if(!restaurado)S.items=[];
   renderMain();
   renderStepper();
+  if(CUR===TOTAL)$('btn-scorm-done').disabled=false;
+  document.addEventListener('input',saveSoon);
+  document.addEventListener('change',saveSoon);
+  if(restaurado)setTimeout(()=>toast(
+    '&#8635; Retomamos donde hab\u00edas quedado (Paso '+CUR+'). Us\u00e1 <b>Nuevo</b> arriba para empezar de cero.',6000),400);
 })();
 
 window.onbeforeunload=()=>{
