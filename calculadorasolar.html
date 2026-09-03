@@ -35,6 +35,7 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
 .eco-pill{background:var(--g2);color:var(--g1);font-weight:800;font-size:11px;
   padding:3px 9px;border-radius:4px;letter-spacing:.4px}
 .sb-title{color:#fff;font-size:13px;font-weight:700}
+.sb-title-short{display:none}
 .sb-sub{color:var(--g2);font-size:10px}
 #btn-scorm-done{background:var(--g2);color:var(--g1);border:none;padding:5px 14px;
   border-radius:5px;font-size:11px;font-weight:700;cursor:pointer;
@@ -78,6 +79,21 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
   padding:5px 10px;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;
   min-height:44px;display:inline-flex;align-items:center;justify-content:center;gap:5px}
 #btn-reset:hover{background:rgba(255,255,255,.12);color:#fff}
+/* En 375px el título ("Simulador · Diseño y Cotización FV") partía en dos
+   líneas y los tres botones (Criterios, Nuevo, Marcar completo) no entraban
+   en la misma fila que el logo, así que se apilaban debajo: ~170px antes de
+   llegar al contenido. Acá se acorta el título y los botones pasan a sólo
+   ícono (el texto queda para lectores de pantalla vía aria-label, ya que
+   dejar de renderizarlo saca el texto del cálculo del nombre accesible). */
+@media(max-width:480px){
+  #scorm-bar{padding:8px 10px;flex-wrap:nowrap}
+  .sb-title-full{display:none}
+  .sb-title-short{display:block}
+  .sb-sub{display:none}
+  #scorm-bar .btn-label{display:none}
+  #btn-params,#btn-reset{padding:5px 12px}
+  #scorm-time{font-size:9px}
+}
 
 /* ── STEPPER ──────────────────────────────────────────────────── */
 #stepper{background:#fff;border-bottom:1px solid var(--bd);padding:0;overflow-x:auto;
@@ -502,9 +518,9 @@ table.t td input:focus{outline:none;border-color:var(--g2);box-shadow:0 0 0 2px 
   </div>
   <div style="display:flex;align-items:center;gap:10px">
     <span id="scorm-time">0:00</span>
-    <button id="btn-params" onclick="openParams()" title="Criterios de cálculo del proyecto">&#9881; <span class="btn-label">Criterios</span></button>
-    <button id="btn-reset" onclick="resetAll()" title="Borrar todo y empezar un proyecto nuevo">&#8635; <span class="btn-label">Nuevo</span></button>
-    <button id="btn-scorm-done" disabled onclick="scormComplete()" title="Marcar el paso actual como completo">&#10003; <span class="btn-label">Marcar completo</span></button>
+    <button id="btn-params" onclick="openParams()" title="Criterios de cálculo del proyecto" aria-label="Criterios de cálculo del proyecto">&#9881; <span class="btn-label">Criterios</span></button>
+    <button id="btn-reset" onclick="resetAll()" title="Borrar todo y empezar un proyecto nuevo" aria-label="Borrar todo y empezar un proyecto nuevo">&#8635; <span class="btn-label">Nuevo</span></button>
+    <button id="btn-scorm-done" disabled onclick="scormComplete()" title="Marcar el paso actual como completo" aria-label="Marcar el paso actual como completo">&#10003; <span class="btn-label">Marcar completo</span></button>
   </div>
 </div>
 
