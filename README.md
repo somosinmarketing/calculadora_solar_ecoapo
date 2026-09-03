@@ -61,7 +61,7 @@ las interpolan, para que la fórmula que se muestra sea siempre la que se usa.
 | Concepto | Criterio |
 |---|---|
 | Paneles | `Wp = Wh_a_cubrir ÷ (PR × HSP)`, con PR 0,80 on-grid y 0,75 con baterías |
-| Energía a cubrir | Consumo de 24 h con inyección o con baterías; sólo la fracción diurna en On Grid sin inyección. Se multiplica por la cobertura objetivo |
+| Energía a cubrir | Lo que el sistema puede aprovechar por día, según el tipo: Off Grid y cualquier sistema con inyección, las 24 h; On Grid sin inyección, sólo el consumo diurno; Híbrido sin inyección, el consumo diurno más lo que entra en el banco. Se multiplica por la cobertura objetivo |
 | Cobertura objetivo | % del consumo que cubre el FV; el resto lo aporta la red. Siempre 100% en Off Grid |
 | Irradiación | Peor mes (junio) en Off Grid, promedio anual con red disponible. Configurable |
 | Fracción diurna | Según el perfil del Paso 3: diurno 70%, equilibrado 50%, nocturno 30% |
@@ -120,6 +120,10 @@ informa la corriente de carga disponible, la que el banco tolera y el tiempo de
 recarga desde vacío, y avisa si no entra en la ventana.
 
 ### Limitaciones conocidas
+
+- El aporte del banco al aprovechamiento en Híbrido sin inyección se toma como
+  su energía útil diaria completa. En la práctica depende de cuánto se descargó
+  la noche anterior; el criterio es optimista dentro de un margen razonable.
 
 - El repago es **simple**: no contempla inflación, actualización de tarifas,
   financiamiento, degradación de los módulos ni mantenimiento.

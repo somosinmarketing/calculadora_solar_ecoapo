@@ -1690,7 +1690,7 @@ ${S.sysType!=='offgrid'?`
     Sin inyecci&oacute;n s&oacute;lo se aprovecha lo que se consume mientras hay sol: los paneles se
     dimensionan sobre el consumo diurno seg&uacute;n el perfil del Paso 3
     (<b>${S.profile}</b>, ${Math.round(fracDiaActual()*100)}% diurno). Lo que se genera de m&aacute;s se pierde.</div>`:''}
-  ${S.inyecta===false&&S.sysType==='hybrid'?'<div class="section-note">En h&iacute;brido el excedente carga las bater&iacute;as en vez de perderse, as&iacute; que los paneles se siguen dimensionando para cubrir las 24 h.</div>':''}
+  ${S.inyecta===false&&S.sysType==='hybrid'?'<div class="section-note">En h&iacute;brido el excedente diurno carga las bater&iacute;as en vez de perderse, as&iacute; que los paneles cubren el consumo con sol <b>m&aacute;s</b> lo que entre en el banco. Lo que exceda esa capacidad se pierde, y esa parte del consumo la aporta la red.</div>':''}
   ${S.inyecta===true?'<div class="section-note">Con balance neto el excedente del d&iacute;a compensa el consumo nocturno: los paneles cubren las 24 h.</div>':''}
   <div class="fld" style="max-width:340px;margin-top:12px">
     <label>Cobertura solar objetivo</label>
@@ -1828,32 +1828,6 @@ function calc(){
     avisos.push('Con bater\u00edas de '+bat.V+' V no se arma un banco de '+volt+' V exacto.');
   }
 
-  // ── PANELS ──────────────────────────────────────────────────────
-  // PR (Performance Ratio) = factor global de rendimiento del sistema:
-  //   Pérd. cableado DC: ~2% | Temperatura: ~5% | Suciedad: ~3%
-  //   Efic. MPPT: ~2%        | Discordancia: ~1% | Efic. inversor: ~5%
-  //   Total pérdidas: ~18–22% → PR = 0,75–0,80
-  const PR=S.sysType==='ongrid'?P.prGrid:P.prBat;
-  // Cuánto del consumo tiene que cubrir el generador FV.
-  // Con inyección (o con baterías que absorban el excedente) hay que producir
-  // durante las horas de sol la energía de las 24 h. Sin inyección, en cambio,
-  // lo que se genera de más se pierde: sólo sirve el consumo que ocurre en
-  // simultáneo con la generación, así que se dimensiona sobre la parte diurna.
-  const FRAC={diurno:P.fracDiurno,equilibrado:P.fracEquilibrado,nocturno:P.fracNocturno};
-  const fracDia=(FRAC[S.profile]!==undefined?FRAC[S.profile]:50)/100;
-  const sinInyeccion=S.sysType==='ongrid'&&S.inyecta===false;
-  // Con red disponible el sistema no tiene por qué cubrir todo el consumo: se
-  // puede dimensionar para una fracción y tomar el resto de la red. En Off Grid
-  // no hay de dónde tomar el resto, así que siempre es 100%.
-  const cobObj=S.sysType==='offgrid'?1:Math.min(Math.max(S.coberturaObj,10),100)/100;
-  const whBase=sinInyeccion?totWh*fracDia:totWh;
-  const whFV=whBase*cobObj;
-  // Wp necesarios = (Wh/día a cubrir) / (PR × HSP)
-  const wpNeed=whFV/(PR*hsp);
-  const nPan=Math.ceil(wpNeed/panWp);
-  const totWpInst=nPan*panWp;
-  const whGen=totWpInst*hsp*PR; // energía real generada con esta instalación
-
   // ── BATTERIES ───────────────────────────────────────────────────
   // Energía a almacenar para 'auto' horas de operación:
   //   E_bruta = (Wh/día ÷ 24h × h_auto) ÷ DoD ÷ η_bat ÷ η_inv
@@ -1897,6 +1871,53 @@ function calc(){
       f1(whStore/1000)+' kWh ('+f1(batOver)+'\u00d7 lo requerido): es el escal\u00f3n m\u00ednimo con esta bater\u00eda. '+
       'Prob\u00e1 una de menor capacidad o menor tensi\u00f3n si quer\u00e9s ajustar el costo.');
   }
+
+  // ── PANELS ──────────────────────────────────────────────────────
+  // PR (Performance Ratio) = factor global de rendimiento del sistema:
+  //   Pérd. cableado DC: ~2% | Temperatura: ~5% | Suciedad: ~3%
+  //   Efic. MPPT: ~2%        | Discordancia: ~1% | Efic. inversor: ~5%
+  //   Total pérdidas: ~18–22% → PR = 0,75–0,80
+  const PR=S.sysType==='ongrid'?P.prGrid:P.prBat;
+  // Cuánto del consumo tiene que cubrir el generador FV.
+  // Con inyección (o con baterías que absorban el excedente) hay que producir
+  // durante las horas de sol la energía de las 24 h. Sin inyección, en cambio,
+  // lo que se genera de más se pierde: sólo sirve el consumo que ocurre en
+  // simultáneo con la generación, así que se dimensiona sobre la parte diurna.
+  const FRAC={diurno:P.fracDiurno,equilibrado:P.fracEquilibrado,nocturno:P.fracNocturno};
+  const fracDia=(FRAC[S.profile]!==undefined?FRAC[S.profile]:50)/100;
+  // Cuánta energía puede APROVECHAR realmente el sistema por día. Generar de
+  // más no sirve si no hay dónde ponerlo:
+  //   - Con inyección, todo el excedente va a la red y se aprovecha entero.
+  //   - On Grid sin inyección: sólo el consumo que ocurre mientras hay sol.
+  //   - Híbrido sin inyección: el consumo diurno MÁS lo que entre en el banco,
+  //     que de noche se devuelve. Antes se dimensionaba como si cubriera las
+  //     24 h, lo que contradecía al banco, que ya asume que la red aporta.
+  const sinInyeccion=S.sysType!=='offgrid'&&S.inyecta===false;
+  const bankUtil=bankWh*bat.DoD;              // Wh útiles del banco
+  let whBase,critFV;
+  if(S.sysType==='offgrid'||S.inyecta===true){
+    whBase=totWh;
+    critFV=S.sysType==='offgrid'?'cubre el consumo de 24 h (única fuente)'
+                                :'cubre el consumo de 24 h (el excedente se inyecta)';
+  } else if(S.sysType==='hybrid'){
+    whBase=Math.min(totWh,totWh*fracDia+bankUtil);
+    critFV=whBase<totWh
+      ?'cubre el consumo diurno más lo que entra en el banco; el resto lo toma de la red'
+      :'cubre el consumo de 24 h (el banco absorbe todo el excedente diurno)';
+  } else {
+    whBase=totWh*fracDia;
+    critFV='cubre sólo el consumo diurno; sin inyección el excedente se pierde';
+  }
+  // Con red disponible el sistema no tiene por qué cubrir todo el consumo: se
+  // puede dimensionar para una fracción y tomar el resto de la red. En Off Grid
+  // no hay de dónde tomar el resto, así que siempre es 100%.
+  const cobObj=S.sysType==='offgrid'?1:Math.min(Math.max(S.coberturaObj,10),100)/100;
+  const whFV=whBase*cobObj;
+  // Wp necesarios = (Wh/día a cubrir) / (PR × HSP)
+  const wpNeed=whFV/(PR*hsp);
+  const nPan=Math.ceil(wpNeed/panWp);
+  const totWpInst=nPan*panWp;
+  const whGen=totWpInst*hsp*PR; // energía real generada con esta instalación
 
   // ── INVERTER ─────────────────────────────────────────────────────
   // Off-grid/híbrido: se dimensiona sobre la carga nominal × 1,25.
@@ -1974,7 +1995,7 @@ function calc(){
   return{totW,totWpk,totWh,volt,whStore,batS,batP,nBat,bankAh,bankWh,bankKwh,
     nPan,totWpInst,whGen,wpNeed,invReq,invSz,invCrit,invOver,mpptCurr,mpptSz,mpptOver,
     panS,panP,Vmpp,Voc,hsp,hspAnual,hspPeor,critHsp,panWp,auto,bat,PR,ETA_bat,ETA_inv,batOver,cobertura,avisos,
-    fracDia,whFV,whBase,cobObj,sinInyeccion,inyecta:S.inyecta,profile:S.profile,
+    fracDia,whFV,whBase,cobObj,sinInyeccion,critFV,bankUtil,inyecta:S.inyecta,profile:S.profile,
     fracResp,whRespDia,whEsencial,respaldoFuente,areaMod,areaTecho,
     iCargaDisp,iMaxBanco,tRecarga,horasSolUtiles:P.horasSolUtiles,
     sysType:S.sysType,consumoMode:S.consumoMode};
@@ -2047,11 +2068,13 @@ E (Wh) = ${R.nBat} × ${R.bat.Ah} Ah × ${R.bat.V} V = ${fa(R.bankWh)} Wh</div>
 </div>
 ${tip('Trazabilidad de fórmulas — cómo se calculó cada componente',
   `<b>PANELES:</b><br>
-  ${R.sinInyeccion
-    ?`Sin inyección sólo sirve el consumo diurno (perfil <b>${R.profile}</b> = ${Math.round(R.fracDia*100)}%):<br>
-  Wh_a_cubrir = ${fa(Math.round(R.totWh))} × ${String(R.fracDia).replace('.',',')} = ${fa(Math.round(R.whFV))} Wh<br>`
-    :`Hay que producir durante las horas de sol la energía de las 24 h:<br>
-  Wh_a_cubrir = ${fa(Math.round(R.whFV))} Wh<br>`}
+  El sistema ${R.critFV}:<br>
+  ${R.sysType==='hybrid'&&R.inyecta===false
+    ?`Wh_aprovechable = consumo_diurno + banco_útil = ${fa(Math.round(R.totWh*R.fracDia))} + ${fa(Math.round(R.bankUtil))} = ${fa(Math.round(R.whBase))} Wh<br>`
+    :R.sinInyeccion
+      ?`Wh_aprovechable = ${fa(Math.round(R.totWh))} × ${String(R.fracDia).replace('.',',')} (perfil <b>${R.profile}</b>) = ${fa(Math.round(R.whBase))} Wh<br>`
+      :`Wh_aprovechable = ${fa(Math.round(R.whBase))} Wh<br>`}
+  ${R.cobObj<1?`Cobertura objetivo ${Math.round(R.cobObj*100)}%: Wh_a_cubrir = ${fa(Math.round(R.whFV))} Wh<br>`:''}
   Wp_necesarios = Wh_a_cubrir ÷ (PR × HSP)<br>
   = ${fa(Math.round(R.whFV))} ÷ (${R.PR} × ${R.hsp}) = ${fa(Math.round(R.wpNeed))} Wp → ${R.nPan} paneles × ${R.panWp} Wp<br><br>
   <b>INVERSOR:</b><br>
@@ -2108,7 +2131,7 @@ ${(()=>{const m=paramsModificados();return m.length?`<div class="alert-ok" style
   <div class="rc2">
     <div class="rc2-lbl">&#9889; Generaci&oacute;n estimada</div>
     <div class="rc2-val">${f2(R.whGen/1000)}</div>
-    <div class="rc2-unit">kWh/d&iacute;a &bull; cubre el ${Math.round(R.cobertura*100)}% del consumo${R.sinInyeccion?'<br>Sin inyecci&oacute;n: la red cubre el resto':''}</div>
+    <div class="rc2-unit">kWh/d&iacute;a &bull; cubre el ${Math.round(R.cobertura*100)}% del consumo${R.whBase<R.totWh?'<br>El resto lo aporta la red':''}</div>
   </div>
 </div>
 ${batHtml}
@@ -2711,7 +2734,8 @@ Modo de carga:       ${S.consumoMode==='factura'?'Desde factura ('+S.facturaKwh+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SISTEMA RECOMENDADO
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${R.sysType!=='offgrid'?'Inyección a red:   '+(R.inyecta?'Sí (balance neto)':'No (autoconsumo)')+'\n':''}${R.sinInyeccion?'Criterio FV:       cubre el consumo diurno ('+Math.round(R.fracDia*100)+'%); la red cubre el resto\n':'Criterio FV:       cubre el consumo de 24 h\n'}Paneles solares:   ${R.nPan} × ${R.panWp} Wp = ${(R.totWpInst/1000).toFixed(2)} kWp
+${R.sysType!=='offgrid'?'Inyección a red:   '+(R.inyecta?'Sí (balance neto)':'No (autoconsumo)')+'\n':''}Criterio FV:       ${R.critFV}
+${R.whBase<R.totWh?'Aprovechable/día:  '+Math.round(R.whBase)+' Wh de '+Math.round(R.totWh)+' Wh consumidos\n':''}Paneles solares:   ${R.nPan} × ${R.panWp} Wp = ${(R.totWpInst/1000).toFixed(2)} kWp
 Configuración:     ${R.panS}S × ${R.panP}P · Vmpp ~${R.Vmpp}V · Voc ~${R.Voc}V
 Inversor:          ${R.invSz.toLocaleString('es-AR')} W
 ${R.nBat>0?`Banco de baterías: ${R.nBat} × ${R.bat.n}
@@ -2898,8 +2922,7 @@ function exportPDF(){
     const sumRows=[
       ['Consumo total/d\u00eda',(R.totWh/1000).toFixed(2)+' kWh/d\u00eda','Irradiaci\u00f3n',R.hsp+' HSP / PR='+R.PR],
       ['Paneles solares',R.nPan+' \u00d7 '+R.panWp+' Wp = '+(R.totWpInst/1000).toFixed(2)+' kWp','Inversor',fa(R.invSz)+' W'],
-      ['Criterio FV',R.sinInyeccion?'Consumo diurno ('+Math.round(R.fracDia*100)+'%), sin inyecci\u00f3n':'Consumo de 24 h',
-       'Perfil',R.profile],
+      ['Criterio FV',R.critFV,'Perfil',R.profile],
       ['Superficie de techo',R.areaTecho.toFixed(1)+' m\u00b2 (m\u00f3dulos '+R.areaMod.toFixed(1)+' m\u00b2)',
        'Irradiaci\u00f3n',R.hsp+' HSP ('+(R.critHsp==='peor'?'peor mes':'anual')+')'],
     ];

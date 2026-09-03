@@ -302,5 +302,48 @@ chk('ampliar la ventana quita el aviso de recarga',
     !R.avisos.some(a=>a.includes('ventana de sol')),
     'ventana de 24 h para una recarga de '+f1v(R.tRecarga)+' h');
 
+console.log('\n=== Híbrido: los paneles reconocen el aporte de la red ===');
+// 8.000 Wh/día, perfil equilibrado (50% diurno = 4.000 Wh).
+const casa=()=>[{id:1,device:'Casa',w:1000,qty:1,hd:8,pk:1}];
+
+// Con inyección el excedente va a la red: se cubren las 24 h.
+base(); S.sysType='hybrid'; S.inyecta=true; S.batId='lfe300-48'; S.autonomy=8;
+S.items=casa(); R=calc();
+chk('con inyección cubre las 24 h', Math.abs(R.whBase-8000)<1e-6,
+    Math.round(R.whBase)+' Wh -> '+R.nPan+' paneles');
+const panIny=R.nPan;
+
+// Sin inyección: consumo diurno + lo que entre en el banco.
+base(); S.sysType='hybrid'; S.inyecta=false; S.batId='lfe100-48'; S.autonomy=8;
+S.items=casa(); R=calc();
+const esperado=Math.min(8000, 8000*0.5 + R.bankUtil);
+chk('sin inyección cubre el diurno más el banco útil', Math.abs(R.whBase-esperado)<1e-6,
+    '4.000 diurno + '+Math.round(R.bankUtil)+' de banco = '+Math.round(R.whBase)+' Wh');
+chk('no dimensiona ya como si cubriera las 24 h', R.whBase<8000,
+    Math.round(R.whBase)+' < 8.000 Wh');
+chk('lo explica en critFV', /red/.test(R.critFV), R.critFV);
+
+// Donde el efecto se nota: consumo nocturno (sólo 30% diurno) y banco chico.
+base(); S.sysType='hybrid'; S.inyecta=true; S.profile='nocturno';
+S.batId='lfe100-48'; S.autonomy=8; S.items=casa(); R=calc();
+const panIny2=R.nPan;
+S.inyecta=false; R=calc();
+chk('con perfil nocturno y banco chico, pide menos paneles', R.nPan<panIny2,
+    R.nPan+' sin inyección vs '+panIny2+' con inyección  ('+Math.round(R.whBase)+' Wh aprovechables de 8.000)');
+
+// Con un banco grande el excedente entra entero: vuelve a cubrir las 24 h.
+base(); S.sysType='hybrid'; S.inyecta=false; S.batId='lfe300-48'; S.autonomy=24;
+S.items=casa(); R=calc();
+chk('con banco grande vuelve a cubrir las 24 h', Math.abs(R.whBase-8000)<1e-6,
+    'banco útil '+Math.round(R.bankUtil)+' Wh -> cubre '+Math.round(R.whBase)+' Wh');
+
+// El cambio no debe afectar a los otros tipos de sistema.
+base(); S.sysType='offgrid'; S.batId='lfe300-48'; S.items=casa(); R=calc();
+chk('Off Grid sigue cubriendo el 100%', Math.abs(R.whBase-8000)<1e-6, R.critFV);
+base(); S.sysType='ongrid'; S.inyecta=false; S.items=casa(); R=calc();
+chk('On Grid sin inyección sigue en el diurno', Math.abs(R.whBase-4000)<1e-6, R.critFV);
+base(); S.sysType='ongrid'; S.inyecta=true; S.items=casa(); R=calc();
+chk('On Grid con inyección sigue en 24 h', Math.abs(R.whBase-8000)<1e-6, R.critFV);
+
 console.log(fail===0?'\n===== TESTS UNITARIOS OK =====':'\n===== '+fail+' FALLAS =====');
 process.exit(fail?1:0);
