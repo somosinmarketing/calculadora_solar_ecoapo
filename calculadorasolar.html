@@ -20,6 +20,13 @@ html,body{height:100%;font-family:system-ui,-apple-system,'Segoe UI',Arial,sans-
   font-size:14px;background:#f0f4ee;color:var(--tx);-webkit-font-smoothing:antialiased;
   -webkit-tap-highlight-color:transparent}
 html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+/* Las flechitas nativas de type=number restan ~20px de ancho útil en las
+   celdas angostas de las tablas; con el font-size subido a 16px (fix de
+   zoom de iOS) eso alcanzaba a recortar el texto. Se sacan en todos lados
+   y se usa -moz-appearance para Firefox. */
+input[type=number]{-moz-appearance:textfield}
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
 
 /* ── SCORM BAR ────────────────────────────────────────────────── */
 #scorm-bar{background:var(--g1);padding:7px 16px;display:flex;align-items:center;
@@ -59,7 +66,7 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .prow-lbl{font-size:12px;font-weight:600;color:var(--tx)}
 .prow-help{font-size:11px;color:var(--ts);line-height:1.45;margin-top:2px}
 .prow input{width:100%;padding:6px 8px;border:1px solid #ccc;border-radius:6px;
-  font-size:13px;font-family:inherit;text-align:right}
+  font-size:16px;font-family:inherit;text-align:right}
 .prow input.mod{border-color:var(--am);background:#fffaf0;font-weight:700}
 .prow-def{font-size:10px;color:var(--ts);text-align:right;margin-top:3px}
 #params-ft{flex-shrink:0;display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;
@@ -140,7 +147,7 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .fld label{display:block;font-size:10px;font-weight:700;color:var(--ts);
   text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px}
 .fld input,.fld select,.fld textarea{width:100%;padding:8px 10px;border:1px solid #ccc;
-  border-radius:7px;font-size:13px;font-family:inherit;background:#fff;color:var(--tx);
+  border-radius:7px;font-size:16px;font-family:inherit;background:#fff;color:var(--tx);
   -webkit-appearance:none}
 .fld input:focus,.fld select:focus,.fld textarea:focus{outline:none;border-color:var(--g2);
   box-shadow:0 0 0 3px rgba(140,198,63,.15)}
@@ -155,22 +162,28 @@ table.t th{background:var(--g4);padding:6px 8px;text-align:left;font-size:10px;
 table.t td{padding:5px 7px;border-bottom:1px solid #f0f5ee;vertical-align:middle}
 table.t tr:hover td{background:#fafdf8}
 table.t td input{width:100%;border:1px solid #e0e8d8;border-radius:5px;
-  padding:3px 6px;font-size:11.5px;text-align:right;background:#fff;
+  padding:5px 6px;font-size:16px;text-align:right;background:#fff;
   font-family:inherit;-webkit-appearance:none}
 table.t td input.nm{text-align:left}
 table.t td input:focus{outline:none;border-color:var(--g2);box-shadow:0 0 0 2px rgba(140,198,63,.15)}
 .t-total td{background:var(--g4);font-weight:700;border-top:2px solid var(--g2)}
 .mono{font-family:'Courier New',monospace}
-.btn-del{background:none;border:none;color:#ccc;cursor:pointer;font-size:13px;padding:2px 6px;
-  border-radius:4px;line-height:1}
+.btn-del{background:none;border:none;color:#ccc;cursor:pointer;font-size:15px;
+  border-radius:4px;line-height:1;width:44px;height:44px;display:inline-flex;
+  align-items:center;justify-content:center;flex-shrink:0}
 .btn-del:hover{color:var(--rd);background:#fff0f0}
 .empty-row td{text-align:center;padding:18px;color:var(--ts);font-size:12px}
+/* Checkbox "Resp.": el input de 13x13 es imposible de tocar en pantalla; el
+   <label> envuelve toda la celda para que el área activa sea la celda entera. */
+.chk-cell{display:flex;align-items:center;justify-content:center;
+  min-width:44px;min-height:44px;cursor:pointer}
+.chk-cell input{width:19px;height:19px;cursor:pointer}
 
 /* ── ADD ROW ──────────────────────────────────────────────────── */
 .add-bar{display:flex;gap:7px;margin-bottom:9px;flex-wrap:wrap}
 .add-bar select{flex:1;min-width:160px;padding:7px 9px;border:1px solid #ccc;
-  border-radius:7px;font-size:12px;font-family:inherit}
-.add-bar input{padding:7px 9px;border:1px solid #ccc;border-radius:7px;font-size:12px;
+  border-radius:7px;font-size:16px;font-family:inherit}
+.add-bar input{padding:7px 9px;border:1px solid #ccc;border-radius:7px;font-size:16px;
   font-family:inherit}
 .add-bar input.w60{width:70px}
 
@@ -257,8 +270,8 @@ table.t td input:focus{outline:none;border-color:var(--g2);box-shadow:0 0 0 2px 
   font-weight:700;text-transform:uppercase}
 .qt th.r,.qt td.r{text-align:right}
 .qt td{padding:7px 9px;border-bottom:1px solid #eef3ea;vertical-align:middle}
-.qt td input{border:1px solid #ddd;border-radius:5px;padding:4px 7px;font-size:12px;
-  text-align:right;width:90px;font-family:'Courier New',monospace;background:#fff;
+.qt td input{border:1px solid #ddd;border-radius:5px;padding:5px 7px;font-size:16px;
+  text-align:right;width:100px;font-family:'Courier New',monospace;background:#fff;
   -webkit-appearance:none}
 .qt td input:focus{outline:none;border-color:var(--g2);box-shadow:0 0 0 2px rgba(140,198,63,.15)}
 .qt .tot-row td{background:var(--g4);font-weight:700;border-top:1px solid var(--bd)}
@@ -275,7 +288,7 @@ table.t td input:focus{outline:none;border-color:var(--g2);box-shadow:0 0 0 2px 
 .curr-box label{font-size:10px;font-weight:700;color:var(--ts);text-transform:uppercase;
   letter-spacing:.04em;display:block;margin-bottom:3px}
 .curr-box input{border:1px solid #ccc;border-radius:6px;padding:7px 10px;
-  font-size:14px;font-weight:700;width:120px;text-align:right;background:#fff;
+  font-size:16px;font-weight:700;width:120px;text-align:right;background:#fff;
   font-family:inherit;-webkit-appearance:none}
 .curr-box input:focus{outline:none;border-color:var(--g2);box-shadow:0 0 0 2px rgba(140,198,63,.15)}
 .markup-note{font-size:10px;color:var(--ts);margin-top:3px;line-height:1.4}
@@ -344,12 +357,116 @@ table.t td input:focus{outline:none;border-color:var(--g2);box-shadow:0 0 0 2px 
   .stp-inner{min-width:36px;padding:7px 4px 5px}
   #main{padding-bottom:240px}
 }
+
+/* ── MOBILE CARDS: tabla de consumos y tabla de cotización ───────────────
+   Ambas tablas (460px y 535px de ancho de columnas) no entran en un
+   contenedor de ~320-350px: las columnas de importe -y en el Paso 7, el
+   TOTAL FINAL- quedan fuera del área visible y hace falta arrastrar la
+   tabla en horizontal para verlas. Acá cada <tr> (filas de datos Y filas
+   de <tfoot>, o sea los totales) se convierte en una tarjeta apilada vía
+   CSS grid/flex, sin tocar el markup que usa el JS (mismos <td>, mismo
+   orden de columnas, mismos id). En escritorio no cambia nada: esto sólo
+   corre por debajo de 640px. */
+@media(max-width:640px){
+  .tw-cards{border:none;background:transparent;overflow:visible;margin-bottom:0}
+
+  /* --- Paso 2: tabla de consumos (table.t / #items-body, #items-foot) ---
+     #items-body (filas por equipo) y #items-foot (fila de totales) se
+     estilan por separado -por id, no por :not()- porque comparten la
+     misma cantidad de columnas y un selector por posición se confunde
+     de una fila a la otra. */
+  table.t{display:block;width:100%;min-width:0}
+  table.t thead{display:none}
+  table.t tbody,table.t tfoot{display:block}
+  #items-body tr{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;
+    grid-template-areas:"name name name name" "w qty hd resp" "wh wh wh del";
+    column-gap:8px;row-gap:8px;background:#fff;border:1px solid var(--bd);
+    border-radius:10px;padding:12px;margin-bottom:9px}
+  #items-body tr.empty-row{display:block;text-align:center}
+  table.t td{display:block;padding:0;border:none;min-width:0;width:auto!important}
+  table.t td input{width:100%!important}
+  #items-body td:nth-child(1){grid-area:name}
+  #items-body td:nth-child(2){grid-area:w}
+  #items-body td:nth-child(3){grid-area:qty}
+  #items-body td:nth-child(4){grid-area:hd}
+  #items-body td:nth-child(5){grid-area:resp;display:flex;flex-direction:column;align-items:center;gap:3px}
+  #items-body td:nth-child(6){grid-area:wh;display:flex;align-items:center}
+  #items-body td:nth-child(7){grid-area:del;display:flex;align-items:center;justify-content:flex-end}
+  #items-body tr:not(.empty-row) td:nth-child(2)::before{content:'W'}
+  #items-body tr:not(.empty-row) td:nth-child(3)::before{content:'Cant.'}
+  #items-body tr:not(.empty-row) td:nth-child(4)::before{content:'H/día'}
+  #items-body tr:not(.empty-row) td:nth-child(5)::before{content:'Resp.'}
+  #items-body tr:not(.empty-row) td:nth-child(2)::before,
+  #items-body tr:not(.empty-row) td:nth-child(3)::before,
+  #items-body tr:not(.empty-row) td:nth-child(4)::before,
+  #items-body tr:not(.empty-row) td:nth-child(5)::before{
+    font-size:9px;font-weight:700;color:var(--ts);text-transform:uppercase;letter-spacing:.04em}
+
+  /* Fila de totales del día (#items-foot .t-total): bloque propio, con el
+     Wh/día bien visible, sin depender de scrollear la tabla. */
+  #items-foot tr.t-total{display:block;grid-template-columns:none;background:var(--g4);
+    border:1px solid var(--g2);border-radius:10px;padding:11px 13px;margin-top:2px}
+  #items-foot tr.t-total td{display:block;grid-area:unset;width:auto!important;padding:1px 0;border:none}
+  #items-foot tr.t-total td:nth-child(1){font-size:11px;font-weight:700;color:var(--g1);
+    text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px}
+  #items-foot tr.t-total td:nth-child(2){display:inline-block;color:var(--ts);margin-right:10px}
+  #items-foot tr.t-total td:nth-child(2)::before{content:'Esencial: '}
+  #items-foot tr.t-total td:nth-child(3){display:inline-block;font-size:15px!important;font-weight:800;color:var(--g1)}
+  #items-foot tr.t-total td:nth-child(4){display:none}
+
+  /* --- Paso 7: tabla de cotización (table.qt.qt-quote) --- */
+  .qt-quote{display:block;width:100%;min-width:0}
+  .qt-quote thead{display:none}
+  .qt-quote tbody{display:block}
+  .qt-quote tbody tr{display:grid;grid-template-columns:1fr 1fr 1fr;
+    grid-template-areas:"name name name" "qty price iva" "netusd netusd netars" "del del del";
+    column-gap:8px;row-gap:6px;background:#fff;border:1px solid var(--bd);
+    border-radius:10px;padding:12px;margin-bottom:9px}
+  .qt-quote tbody td{display:flex;flex-direction:column;gap:3px;padding:0;border:none;width:auto!important}
+  .qt-quote tbody td input{width:100%!important}
+  .qt-quote tbody td:nth-child(1){grid-area:name}
+  .qt-quote tbody td:nth-child(2){grid-area:qty}
+  .qt-quote tbody td:nth-child(3){grid-area:price}
+  .qt-quote tbody td:nth-child(4){grid-area:iva}
+  .qt-quote tbody td:nth-child(5){grid-area:netusd;flex-direction:row;
+    align-items:center;justify-content:space-between}
+  .qt-quote tbody td:nth-child(6){grid-area:netars;align-items:flex-end}
+  .qt-quote tbody td:nth-child(7){grid-area:del;flex-direction:row;justify-content:flex-end}
+  .qt-quote tbody td:nth-child(2)::before{content:'Cant.'}
+  .qt-quote tbody td:nth-child(3)::before{content:'P. Unit. USD'}
+  .qt-quote tbody td:nth-child(4)::before{content:'IVA %'}
+  .qt-quote tbody td:nth-child(2)::before,
+  .qt-quote tbody td:nth-child(3)::before,
+  .qt-quote tbody td:nth-child(4)::before{font-size:9px;font-weight:700;color:var(--ts);
+    text-transform:uppercase;letter-spacing:.04em}
+  .qt-quote tbody td:nth-child(5)::before{content:'Neto ítem';font-size:9px;font-weight:700;
+    color:var(--ts);text-transform:uppercase}
+
+  /* Pie (#q-sub-usd, #q-mark-usd, #q-sale-usd, #q-iva-usd, #q-grand-usd,
+     #q-grand-ars): bloque de resumen aparte, siempre visible sin scroll
+     lateral -es el fallo funcional que reporta el plan para este paso. */
+  .qt-quote tfoot{display:block;margin-top:4px;border:1px solid var(--bd);
+    border-radius:10px;overflow:hidden}
+  .qt-quote tfoot tr{display:flex;align-items:baseline;justify-content:space-between;
+    padding:9px 13px;background:var(--g4);border-bottom:1px solid var(--bd)}
+  .qt-quote tfoot tr td{display:none;border:none;padding:0;width:auto!important}
+  .qt-quote tfoot tr td:nth-child(1){display:block;flex:1;padding-right:8px}
+  .qt-quote tfoot tr td:nth-child(2){display:block;font-weight:700;text-align:right;white-space:nowrap}
+  .qt-quote tfoot tr td:nth-child(3){display:block;font-size:10px!important;color:var(--ts);
+    margin-left:8px;text-align:right;white-space:nowrap}
+  .qt-quote tfoot tr td:nth-child(3):empty{display:none}
+  .qt-quote tfoot tr.grand-row{background:var(--g1);border-bottom:none;padding:13px}
+  .qt-quote tfoot tr.grand-row td{color:#fff}
+  .qt-quote tfoot tr.grand-row td:nth-child(2){font-size:17px!important}
+}
+
 @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 @media print{#scorm-bar,#stepper,#prog-bar,#bot-nav,#benefits-bar,.tip,.add-bar,.btn-g,.btn-ghost{display:none!important}
   #main{padding:0;max-width:100%}}
-/* Prevent iOS zoom on focus */
-input,select,textarea{font-size:max(16px,1em)}
-@media(min-width:600px){input,select,textarea{font-size:inherit}}
+/* Anti-zoom iOS: cada regla de input/select/textarea de arriba ya fija
+   font-size:16px explícito (Safari hace zoom automático por debajo de eso).
+   No hay una regla genérica de respaldo porque, con selectores de clase,
+   perdería siempre contra la específica — quedaría muerta y confundiría. */
 #bot-nav{padding-bottom:calc(10px + env(safe-area-inset-bottom,0px))}
 </style>
 </head>
@@ -1151,11 +1268,11 @@ ${tip('&#128161; ¿Cómo se calcula el consumo?',
   <select id="cat-sel"><option value="">— Catálogo de equipos —</option>${CAT.map(c=>`<option value="${esc(c.n)}">${esc(c.n)} (${c.w}W)</option>`).join('')}</select>
   <button class="btn btn-g btn-sm" onclick="addFromCat()">+ Agregar</button>
   <span style="font-size:11px;color:var(--ts);align-self:center">ó</span>
-  <input id="cu-dev" placeholder="Equipo personalizado" style="flex:1;min-width:110px;padding:6px 9px;border:1px solid #ccc;border-radius:7px;font-size:12px">
-  <input id="cu-w" type="number" placeholder="W" class="w60" style="padding:6px 9px;border:1px solid #ccc;border-radius:7px;font-size:12px;width:65px">
+  <input id="cu-dev" placeholder="Equipo personalizado" style="flex:1;min-width:110px;padding:6px 9px;border:1px solid #ccc;border-radius:7px;font-size:16px">
+  <input id="cu-w" type="number" placeholder="W" class="w60" style="padding:6px 9px;border:1px solid #ccc;border-radius:7px;font-size:16px;width:75px">
   <button class="btn btn-ghost btn-sm" onclick="addCustom()">+ Personalizado</button>
 </div>
-<div class="tw">
+<div class="tw tw-cards">
   <table class="t">
     <thead><tr>
       <th style="width:30%">Equipo</th>
@@ -1287,15 +1404,15 @@ function renderItems(){
     return `<tr>
 <td><input class="nm" value="${esc(it.device)}"
   oninput="iFld(${it.id},'device',this.value)"></td>
-<td><input type="number" value="${it.w}" min="0" style="width:55px"
+<td><input type="number" value="${it.w}" min="0" style="width:64px"
   oninput="iFld(${it.id},'w',this.value)"></td>
-<td><input type="number" value="${it.qty}" min="1" max="99" style="width:45px"
+<td><input type="number" value="${it.qty}" min="1" max="99" style="width:52px"
   oninput="iFld(${it.id},'qty',this.value)"></td>
-<td><input type="number" value="${it.hd}" min="0" max="24" step="0.5" style="width:50px"
+<td><input type="number" value="${it.hd}" min="0" max="24" step="0.5" style="width:56px"
   oninput="iFld(${it.id},'hd',this.value)"></td>
-<td style="text-align:center"><input type="checkbox" ${it.esencial?'checked':''}
-  onchange="iEsencial(${it.id},this.checked)"
-  title="Marcalo si este equipo tiene que seguir andando con baterías"></td>
+<td style="text-align:center;padding:0"><label class="chk-cell"
+  title="Marcalo si este equipo tiene que seguir andando con baterías"><input type="checkbox" ${it.esencial?'checked':''}
+  onchange="iEsencial(${it.id},this.checked)"></label></td>
 <td class="mono" style="text-align:right"><span id="wh-${it.id}">${wh>0?fa(wh)+' Wh':'—'}</span></td>
 <td><button class="btn-del" onclick="delItem(${it.id})">&#x2715;</button></td>
 </tr>`;
@@ -1964,11 +2081,11 @@ function s7(){
 <td><input class="nm" type="text" value="${esc(it.comp)}"
   data-qid="${it.id}" oninput="qComp(this)" style="font-weight:600;width:100%;min-width:90px"${matched}></td>
 <td style="text-align:center"><input type="number" value="${it.qty}" min="1"
-  data-qid="${it.id}" oninput="qQty(this)" style="width:46px;text-align:center"></td>
+  data-qid="${it.id}" oninput="qQty(this)" style="width:54px;text-align:center"></td>
 <td class="r"><input type="number" placeholder="USD" value="${it.price}"
-  data-qid="${it.id}" oninput="qPrice(this)" min="0" style="width:78px"></td>
-<td class="r" style="width:56px"><input type="number" placeholder="IVA%" value="${it.iva}"
-  id="iv-${it.id}" data-qid="${it.id}" oninput="qIva(this)" min="0" max="50" style="width:52px;text-align:center"
+  data-qid="${it.id}" oninput="qPrice(this)" min="0" style="width:88px"></td>
+<td class="r" style="width:64px"><input type="number" placeholder="IVA%" value="${it.iva}"
+  id="iv-${it.id}" data-qid="${it.id}" oninput="qIva(this)" min="0" max="50" style="width:58px;text-align:center"
   title="IVA individual (%)"></td>
 <td class="r mono"><span id="qt-${it.id}">${tot?'USD '+fa(Math.round(tot)):'<span style="color:#bbb">—</span>'}</span></td>
 <td class="r mono" style="font-size:11px;color:var(--ts)"><span id="qa-${it.id}">${tot?'ARS '+fa(Math.round(tot*S.tc)):'—'}</span></td>
@@ -2035,7 +2152,7 @@ ${tip('Cómo usar las listas de precios y el Markup distribuidor',
     <button class="btn btn-ghost btn-sm" onclick="resetQuote()" title="Borra precios y regenera los ítems según el diseño actual" style="color:#e57373">&#8635; Reiniciar</button>
     </div>
   </div>
-  <div class="tw"><table class="qt">
+  <div class="tw tw-cards"><table class="qt qt-quote">
     <thead><tr>
       <th style="width:28%">Componente</th>
       <th style="width:7%;text-align:center">Cant.</th>
