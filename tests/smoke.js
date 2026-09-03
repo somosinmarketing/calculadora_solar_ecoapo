@@ -52,9 +52,14 @@ const {chromium}=cargarPlaywright();
   const despues=await pg.textContent('#q-sub-usd');
   chk('BUG 2: el subtotal no cambia al mover el foco', antes===despues, antes+' -> '+despues);
 
-  // Desglose coherente: neto + markup + IVA = total
+  // Desglose coherente: neto + markup + IVA = total.
+  // El IVA ya no es un campo global: sale del tipo de componente y se ajusta por fila.
   await pg.fill('#markup-val','20');
-  await pg.fill('#iva-val','21');
+  const ivasIniciales=await pg.evaluate(()=>S.quoteItems.map(i=>({t:i.type,iva:i.iva})));
+  chk('el panel arranca con 10,5% y el resto con 21%',
+      ivasIniciales.find(i=>i.t==='panel').iva===10.5 &&
+      ivasIniciales.filter(i=>i.t!=='panel').every(i=>i.iva===21),
+      JSON.stringify(ivasIniciales.slice(0,3)));
   const num=async id=>parseFloat((await pg.textContent(id)).replace(/[^0-9]/g,''))||0;
   const [net,mk,sale,iva,gr]=await Promise.all(
     ['#q-sub-usd','#q-mark-usd','#q-sale-usd','#q-iva-usd','#q-grand-usd'].map(num));
