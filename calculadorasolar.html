@@ -37,11 +37,13 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
 .sb-title{color:#fff;font-size:13px;font-weight:700}
 .sb-sub{color:var(--g2);font-size:10px}
 #btn-scorm-done{background:var(--g2);color:var(--g1);border:none;padding:5px 14px;
-  border-radius:5px;font-size:11px;font-weight:700;cursor:pointer}
+  border-radius:5px;font-size:11px;font-weight:700;cursor:pointer;
+  min-height:44px;display:inline-flex;align-items:center;justify-content:center;gap:5px}
 #btn-scorm-done:disabled{background:#888;color:#aaa;cursor:not-allowed}
 #scorm-time{font-size:10px;color:rgba(255,255,255,.5)}
 #btn-params{background:transparent;color:rgba(255,255,255,.75);border:1px solid rgba(255,255,255,.3);
-  padding:5px 10px;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit}
+  padding:5px 10px;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;
+  min-height:44px;display:inline-flex;align-items:center;justify-content:center;gap:5px}
 #btn-params:hover{background:rgba(255,255,255,.12);color:#fff}
 #btn-params.mod{border-color:var(--am);color:var(--am)}
 #params-ov{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:none;
@@ -57,7 +59,8 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
 #params-hd h3{font-size:14px;font-weight:700;margin:0}
 #params-hd p{font-size:11px;color:var(--g2);margin:2px 0 0}
 #params-close{background:transparent;border:1px solid rgba(255,255,255,.35);color:#fff;
-  width:28px;height:28px;border-radius:5px;cursor:pointer;font-size:15px;line-height:1;flex-shrink:0}
+  width:44px;height:44px;border-radius:5px;cursor:pointer;font-size:15px;line-height:1;flex-shrink:0;
+  display:inline-flex;align-items:center;justify-content:center}
 #params-body{padding:14px 16px 16px;overflow-y:auto;flex:1;-webkit-overflow-scrolling:touch}
 .pgrp{margin-bottom:16px}
 .pgrp h4{font-size:11px;font-weight:700;color:var(--g1);text-transform:uppercase;
@@ -72,7 +75,8 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
 #params-ft{flex-shrink:0;display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;
   padding:12px 16px;border-top:1px solid var(--bd);background:#fff}
 #btn-reset{background:transparent;color:rgba(255,255,255,.75);border:1px solid rgba(255,255,255,.3);
-  padding:5px 10px;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit}
+  padding:5px 10px;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;
+  min-height:44px;display:inline-flex;align-items:center;justify-content:center;gap:5px}
 #btn-reset:hover{background:rgba(255,255,255,.12);color:#fff}
 
 /* ── STEPPER ──────────────────────────────────────────────────── */
@@ -135,7 +139,7 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
   border:1px solid var(--bd);border-radius:var(--r);padding:5px;overflow:hidden}
 .mode-btn{flex:1;padding:9px 10px;border:none;border-radius:7px;font-size:12px;font-weight:600;
   cursor:pointer;background:transparent;color:var(--ts);transition:all .18s;font-family:inherit;
-  display:flex;align-items:center;justify-content:center;gap:5px}
+  display:flex;align-items:center;justify-content:center;gap:5px;min-height:44px}
 .mode-btn.active{background:var(--g1);color:#fff}
 .mode-btn:hover:not(.active){background:var(--g3);color:var(--g1)}
 
@@ -189,7 +193,8 @@ table.t td input:focus{outline:none;border-color:var(--g2);box-shadow:0 0 0 2px 
 
 /* ── BUTTONS ──────────────────────────────────────────────────── */
 .btn{border:none;cursor:pointer;font-family:inherit;font-weight:600;border-radius:8px;
-  transition:all .18s;display:inline-flex;align-items:center;gap:5px;font-size:13px;padding:8px 16px}
+  transition:all .18s;display:inline-flex;align-items:center;justify-content:center;gap:5px;
+  font-size:13px;padding:8px 16px;min-height:44px}
 .btn-g{background:var(--g2);color:var(--g1)}
 .btn-g:hover{background:#7AB52E}
 .btn-dk{background:var(--g1);color:#fff}
@@ -488,14 +493,17 @@ table.t td input:focus{outline:none;border-color:var(--g2);box-shadow:0 0 0 2px 
     <text x="16" y="20" text-anchor="middle" font-family="Arial" font-weight="900" font-size="9.5" fill="#8CC63F">E</text>
   </svg>
   ECOAPO</span>
-    <div><div class="sb-title">Simulador · Diseño y Cotización FV</div>
+    <div><div class="sb-title">
+      <span class="sb-title-full">Simulador · Diseño y Cotización FV</span>
+      <span class="sb-title-short">Simulador FV</span>
+    </div>
     <div class="sb-sub">Simulador Solar Profesional</div></div>
   </div>
   <div style="display:flex;align-items:center;gap:10px">
     <span id="scorm-time">0:00</span>
-    <button id="btn-params" onclick="openParams()" title="Criterios de cálculo del proyecto">&#9881; Criterios</button>
-    <button id="btn-reset" onclick="resetAll()" title="Borrar todo y empezar un proyecto nuevo">Nuevo</button>
-    <button id="btn-scorm-done" disabled onclick="scormComplete()">&#10003; Marcar completo</button>
+    <button id="btn-params" onclick="openParams()" title="Criterios de cálculo del proyecto">&#9881; <span class="btn-label">Criterios</span></button>
+    <button id="btn-reset" onclick="resetAll()" title="Borrar todo y empezar un proyecto nuevo">&#8635; <span class="btn-label">Nuevo</span></button>
+    <button id="btn-scorm-done" disabled onclick="scormComplete()" title="Marcar el paso actual como completo">&#10003; <span class="btn-label">Marcar completo</span></button>
   </div>
 </div>
 
