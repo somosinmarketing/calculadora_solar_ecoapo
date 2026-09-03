@@ -31,11 +31,22 @@ calculadora se subió a mano y se sigue actualizando así.
 Este repo es la fuente de verdad. Antes de tocar el archivo en el hosting,
 commiteá el cambio acá: es lo que permite revertir si algo sale mal.
 
+## Interfaz
+
+Ningún texto por debajo de 12px, ningún objetivo táctil por debajo de 44px y
+ningún campo por debajo de 16px (con menos de eso, Safari en iPhone hace zoom
+al enfocarlo). Radios, sombras y tipografía salen de variables en `:root`.
+
+La barra de beneficios está **oculta, no eliminada**: `display:none` en
+`#benefits-bar`. Para reactivarla, cambiarlo a `display:block` y devolver el
+`padding-bottom` de `#main` a 210px (220/240px en las media queries).
+
 ## Tests
 
 ```bash
 node tests/unit.js     # motor de dimensionado, respaldo, inyección y totales
 node tests/smoke.js    # recorrido end-to-end en Chromium (requiere playwright)
+node tests/audit-ui.js # ergonomía de interfaz en teléfono y escritorio
 ```
 
 `tests/extract.js` recorta las secciones calculables del HTML por marcas de

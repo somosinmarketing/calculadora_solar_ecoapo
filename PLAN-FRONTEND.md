@@ -100,7 +100,7 @@ progreso con "Paso 3 de 9 · Perfil"— y dejar el stepper completo en escritori
 
 ---
 
-## P2 — Modernización visual
+## P2 — Modernización visual — HECHO
 
 ### 7. Escala tipográfica
 
@@ -110,13 +110,20 @@ herramienta anticuada en escritorio.
 **Qué hacer:** base 16px, ningún texto por debajo de 12px, y una escala
 tipográfica definida en variables CSS en lugar de tamaños sueltos por regla.
 
-### 8. La barra de beneficios ocupa demasiado
+### 8. La barra de beneficios ocupa demasiado — resuelto: oculta, no borrada
+
+Se oculta con `display:none` y queda en el HTML. Para reactivarla: cambiar a
+`display:block` y devolver el `padding-bottom` de `#main` a 210px (220/240px en
+las media queries). El comentario en el CSS lo indica.
+
+<details><summary>Diagnóstico original</summary>
 
 Seis píldoras de marketing fijas sobre la navegación, ~150px de alto en mobile,
 presentes en los 9 pasos. Compite con la herramienta en la pantalla más chica.
 
 **Qué hacer:** en mobile, mostrarla solo en el Paso 1 y en el 9, o colapsarla a
 una línea. En escritorio puede quedarse.
+</details>
 
 ### 9. Sistema visual
 

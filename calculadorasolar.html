@@ -12,12 +12,19 @@
   --g1:#1A4220;--g2:#8CC63F;--g3:#EEF7E4;--g4:#F6FAF3;
   --bl:#1565C0;--or:#D97008;--rd:#B02020;--am:#E8A020;
   --wh:#fff;--tx:#1e1e1e;--ts:#666;--bd:#d8e8cc;
-  --dk:rgba(26,66,32,.12);--r:10px;
+  --dk:rgba(26,66,32,.12);
+  /* Radios y elevación, definidos una vez en lugar de regla por regla. */
+  --r:12px;--r-sm:8px;
+  --sh-1:0 1px 2px rgba(26,66,32,.06);
+  --sh-2:0 4px 14px rgba(26,66,32,.10);
   --step:#e0ede0;--step-done:#1A4220;--step-act:#8CC63F;
 }
 *{box-sizing:border-box;margin:0;padding:0}
+/* Foco visible: hasta ahora sólo los campos lo mostraban, no los botones ni
+   las tarjetas seleccionables. */
+:focus-visible{outline:2px solid var(--g2);outline-offset:2px;border-radius:3px}
 html,body{height:100%;font-family:system-ui,-apple-system,'Segoe UI',Arial,sans-serif;
-  font-size:14px;background:#f0f4ee;color:var(--tx);-webkit-font-smoothing:antialiased;
+  font-size:15px;background:#f0f4ee;color:var(--tx);-webkit-font-smoothing:antialiased;
   -webkit-tap-highlight-color:transparent}
 html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 /* Las flechitas nativas de type=number restan ~20px de ancho útil en las
@@ -32,18 +39,18 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
 #scorm-bar{background:var(--g1);padding:7px 16px;display:flex;align-items:center;
   justify-content:space-between;flex-wrap:wrap;gap:6px}
 #scorm-bar .sb-left{display:flex;align-items:center;gap:9px}
-.eco-pill{background:var(--g2);color:var(--g1);font-weight:800;font-size:11px;
+.eco-pill{background:var(--g2);color:var(--g1);font-weight:800;font-size:12px;
   padding:3px 9px;border-radius:4px;letter-spacing:.4px}
-.sb-title{color:#fff;font-size:13px;font-weight:700}
+.sb-title{color:#fff;font-size:14px;font-weight:700}
 .sb-title-short{display:none}
-.sb-sub{color:var(--g2);font-size:10px}
+.sb-sub{color:var(--g2);font-size:12px}
 #btn-scorm-done{background:var(--g2);color:var(--g1);border:none;padding:5px 14px;
-  border-radius:5px;font-size:11px;font-weight:700;cursor:pointer;
+  border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;
   min-height:44px;display:inline-flex;align-items:center;justify-content:center;gap:5px}
 #btn-scorm-done:disabled{background:#888;color:#aaa;cursor:not-allowed}
-#scorm-time{font-size:10px;color:rgba(255,255,255,.5)}
+#scorm-time{font-size:12px;color:rgba(255,255,255,.5)}
 #btn-params{background:transparent;color:rgba(255,255,255,.75);border:1px solid rgba(255,255,255,.3);
-  padding:5px 10px;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;
+  padding:5px 10px;border-radius:5px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;
   min-height:44px;display:inline-flex;align-items:center;justify-content:center;gap:5px}
 #btn-params:hover{background:rgba(255,255,255,.12);color:#fff}
 #btn-params.mod{border-color:var(--am);color:var(--am)}
@@ -58,25 +65,25 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
 #params-hd{flex-shrink:0;background:var(--g1);color:#fff;padding:13px 16px;
   display:flex;align-items:center;justify-content:space-between;gap:10px}
 #params-hd h3{font-size:14px;font-weight:700;margin:0}
-#params-hd p{font-size:11px;color:var(--g2);margin:2px 0 0}
+#params-hd p{font-size:12px;color:var(--g2);margin:2px 0 0}
 #params-close{background:transparent;border:1px solid rgba(255,255,255,.35);color:#fff;
   width:44px;height:44px;border-radius:5px;cursor:pointer;font-size:15px;line-height:1;flex-shrink:0;
   display:inline-flex;align-items:center;justify-content:center}
 #params-body{padding:14px 16px 16px;overflow-y:auto;flex:1;-webkit-overflow-scrolling:touch}
 .pgrp{margin-bottom:16px}
-.pgrp h4{font-size:11px;font-weight:700;color:var(--g1);text-transform:uppercase;
+.pgrp h4{font-size:12px;font-weight:700;color:var(--g1);text-transform:uppercase;
   letter-spacing:.06em;margin:0 0 8px;padding-bottom:5px;border-bottom:1px solid var(--bd)}
 .prow{display:grid;grid-template-columns:1fr 92px;gap:10px;align-items:start;padding:7px 0}
-.prow-lbl{font-size:12px;font-weight:600;color:var(--tx)}
-.prow-help{font-size:11px;color:var(--ts);line-height:1.45;margin-top:2px}
+.prow-lbl{font-size:13px;font-weight:600;color:var(--tx)}
+.prow-help{font-size:12px;color:var(--ts);line-height:1.45;margin-top:2px}
 .prow input{width:100%;padding:6px 8px;border:1px solid #ccc;border-radius:6px;
   font-size:16px;font-family:inherit;text-align:right;min-height:44px}
 .prow input.mod{border-color:var(--am);background:#fffaf0;font-weight:700}
-.prow-def{font-size:10px;color:var(--ts);text-align:right;margin-top:3px}
+.prow-def{font-size:12px;color:var(--ts);text-align:right;margin-top:3px}
 #params-ft{flex-shrink:0;display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;
   padding:12px 16px;border-top:1px solid var(--bd);background:#fff}
 #btn-reset{background:transparent;color:rgba(255,255,255,.75);border:1px solid rgba(255,255,255,.3);
-  padding:5px 10px;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;
+  padding:5px 10px;border-radius:5px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;
   min-height:44px;display:inline-flex;align-items:center;justify-content:center;gap:5px}
 #btn-reset:hover{background:rgba(255,255,255,.12);color:#fff}
 /* En 375px el título ("Simulador · Diseño y Cotización FV") partía en dos
@@ -92,7 +99,7 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
   .sb-sub{display:none}
   #scorm-bar .btn-label{display:none}
   #btn-params,#btn-reset{padding:5px 12px}
-  #scorm-time{font-size:9px}
+  #scorm-time{font-size:11px}
 }
 
 /* ── STEPPER ──────────────────────────────────────────────────── */
@@ -104,12 +111,12 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
 .stp-inner{display:flex;flex-direction:column;align-items:center;padding:9px 6px 7px;
   min-width:56px;position:relative}
 .stp-circle{width:26px;height:26px;border-radius:50%;background:var(--step);
-  display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;
+  display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;
   color:#888;transition:all .25s;flex-shrink:0}
 .stp.done .stp-circle{background:var(--step-done);color:#fff}
 .stp.active .stp-circle{background:var(--step-act);color:var(--g1);
   box-shadow:0 0 0 3px rgba(140,198,63,.3)}
-.stp-label{font-size:9px;color:#999;margin-top:3px;white-space:nowrap;text-align:center;
+.stp-label{font-size:11px;color:#999;margin-top:3px;white-space:nowrap;text-align:center;
   max-width:60px;line-height:1.2}
 .stp.active .stp-label{color:var(--g1);font-weight:700}
 .stp.done .stp-label{color:var(--g1)}
@@ -124,7 +131,7 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
    stepper completo de 9 pasos se conserva desde tablet/escritorio para
    arriba, donde entra sin recortarse. */
 #step-mobile{display:none;padding:7px 14px 9px}
-#step-mobile-label{font-size:13px;font-weight:700;color:var(--g1)}
+#step-mobile-label{font-size:14px;font-weight:700;color:var(--g1)}
 @media(max-width:680px){
   #step-list{display:none}
   #step-mobile{display:block}
@@ -136,30 +143,30 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
   transition:width .4s ease;width:11.11%}
 
 /* ── MAIN ─────────────────────────────────────────────────────── */
-#main{padding:14px 14px 210px;max-width:860px;margin:0 auto}
+#main{padding:18px 16px 84px;max-width:860px;margin:0 auto}
 
 /* ── STEP HEADER ──────────────────────────────────────────────── */
 .step-hdr{margin-bottom:14px}
-.step-eyebrow{font-size:10px;font-weight:700;color:var(--g2);text-transform:uppercase;
+.step-eyebrow{font-size:12px;font-weight:700;color:var(--g2);text-transform:uppercase;
   letter-spacing:.08em;margin-bottom:4px}
 .step-title{font-size:20px;font-weight:800;color:var(--g1);line-height:1.2}
-.step-sub{font-size:13px;color:var(--ts);margin-top:4px;line-height:1.5}
+.step-sub{font-size:14px;color:var(--ts);margin-top:4px;line-height:1.5}
 
 /* ── TIP CARD ─────────────────────────────────────────────────── */
 .tip{background:var(--g3);border:1px solid rgba(140,198,63,.35);border-radius:var(--r);
   padding:10px 13px;margin-bottom:14px;cursor:pointer}
 .tip-hdr{display:flex;align-items:center;justify-content:space-between;
-  font-size:11px;font-weight:700;color:var(--g1);text-transform:uppercase;letter-spacing:.06em}
-.tip-body{font-size:12px;color:#2a4a2a;line-height:1.65;margin-top:8px;display:none}
+  font-size:12px;font-weight:700;color:var(--g1);text-transform:uppercase;letter-spacing:.06em}
+.tip-body{font-size:13px;color:#2a4a2a;line-height:1.65;margin-top:8px;display:none}
 .tip.open .tip-body{display:block}
 .tip-toggle{font-size:16px;color:var(--g2);line-height:1}
 .tip .formula{background:#fff;border-radius:6px;padding:8px 10px;margin:8px 0 2px;
-  font-family:'Courier New',monospace;font-size:11px;color:var(--g1);line-height:1.8}
+  font-family:'Courier New',monospace;font-size:12px;color:var(--g1);line-height:1.8}
 
 /* ── CARD ─────────────────────────────────────────────────────── */
 .card{background:#fff;border:1px solid var(--bd);border-radius:var(--r);
-  padding:14px;margin-bottom:12px;overflow:hidden}
-.card-title{font-size:12px;font-weight:700;color:var(--g1);text-transform:uppercase;
+  padding:18px;margin-bottom:14px;overflow:hidden;box-shadow:var(--sh-1)}
+.card-title{font-size:13px;font-weight:700;color:var(--g1);text-transform:uppercase;
   letter-spacing:.06em;margin-bottom:11px;display:flex;align-items:center;gap:7px}
 .card-title::before{content:'';display:inline-block;width:3px;height:14px;
   background:var(--g2);border-radius:2px}
@@ -167,7 +174,7 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
 /* ── MODE TOGGLE (Paso 2) ─────────────────────────────────────── */
 .mode-toggle{display:flex;gap:6px;margin-bottom:12px;background:#fff;
   border:1px solid var(--bd);border-radius:var(--r);padding:5px;overflow:hidden}
-.mode-btn{flex:1;padding:9px 10px;border:none;border-radius:7px;font-size:12px;font-weight:600;
+.mode-btn{flex:1;padding:9px 10px;border:none;border-radius:7px;font-size:13px;font-weight:600;
   cursor:pointer;background:transparent;color:var(--ts);transition:all .18s;font-family:inherit;
   display:flex;align-items:center;justify-content:center;gap:5px;min-height:44px}
 .mode-btn.active{background:var(--g1);color:#fff}
@@ -178,7 +185,7 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
 .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
 @media(max-width:520px){.row2,.row3{grid-template-columns:1fr}}
 .fld{margin-bottom:10px}
-.fld label{display:block;font-size:10px;font-weight:700;color:var(--ts);
+.fld label{display:block;font-size:12px;font-weight:700;color:var(--ts);
   text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px}
 .fld input,.fld select,.fld textarea{width:100%;padding:8px 10px;border:1px solid #ccc;
   border-radius:7px;font-size:16px;font-family:inherit;background:#fff;color:var(--tx);
@@ -189,8 +196,8 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
 
 /* ── TABLE ────────────────────────────────────────────────────── */
 .tw{overflow-x:auto;border-radius:8px;border:1px solid var(--bd);margin-bottom:10px}
-table.t{width:100%;border-collapse:collapse;min-width:460px;font-size:12px}
-table.t th{background:var(--g4);padding:6px 8px;text-align:left;font-size:10px;
+table.t{width:100%;border-collapse:collapse;min-width:460px;font-size:13px}
+table.t th{background:var(--g4);padding:6px 8px;text-align:left;font-size:12px;
   font-weight:700;color:var(--g1);border-bottom:1px solid var(--bd);
   text-transform:uppercase;white-space:nowrap}
 table.t td{padding:5px 7px;border-bottom:1px solid #f0f5ee;vertical-align:middle}
@@ -206,7 +213,7 @@ table.t td input:focus{outline:none;border-color:var(--g2);box-shadow:0 0 0 2px 
   border-radius:4px;line-height:1;width:44px;height:44px;display:inline-flex;
   align-items:center;justify-content:center;flex-shrink:0}
 .btn-del:hover{color:var(--rd);background:#fff0f0}
-.empty-row td{text-align:center;padding:18px;color:var(--ts);font-size:12px}
+.empty-row td{text-align:center;padding:18px;color:var(--ts);font-size:13px}
 /* Checkbox "Resp.": el input de 13x13 es imposible de tocar en pantalla; el
    <label> envuelve toda la celda para que el área activa sea la celda entera. */
 .chk-cell{display:flex;align-items:center;justify-content:center;
@@ -236,14 +243,14 @@ table.t td input:focus{outline:none;border-color:var(--g2);box-shadow:0 0 0 2px 
 /* ── BUTTONS ──────────────────────────────────────────────────── */
 .btn{border:none;cursor:pointer;font-family:inherit;font-weight:600;border-radius:8px;
   transition:all .18s;display:inline-flex;align-items:center;justify-content:center;gap:5px;
-  font-size:13px;padding:8px 16px;min-height:44px}
+  font-size:14px;padding:8px 16px;min-height:44px}
 .btn-g{background:var(--g2);color:var(--g1)}
 .btn-g:hover{background:#7AB52E}
 .btn-dk{background:var(--g1);color:#fff}
 .btn-dk:hover{background:#1e4a26}
 .btn-ghost{background:transparent;color:var(--ts);border:1px solid var(--bd)}
 .btn-ghost:hover{color:var(--g1);border-color:var(--g2)}
-.btn-sm{padding:5px 11px;font-size:12px}
+.btn-sm{padding:5px 11px;font-size:13px}
 .btn-full{width:100%;justify-content:center}
 
 /* ── PROFILE CARDS ────────────────────────────────────────────── */
@@ -254,22 +261,22 @@ table.t td input:focus{outline:none;border-color:var(--g2);box-shadow:0 0 0 2px 
 .rc:hover{border-color:var(--g2)}
 .rc.sel{border-color:var(--g2);background:var(--g3)}
 .rc-ico{font-size:24px;margin-bottom:5px}
-.rc-name{font-size:12px;font-weight:700;color:var(--g1);margin-bottom:3px}
-.rc-desc{font-size:10.5px;color:var(--ts);line-height:1.4}
+.rc-name{font-size:13px;font-weight:700;color:var(--g1);margin-bottom:3px}
+.rc-desc{font-size:12px;color:var(--ts);line-height:1.4}
 .rc.sel::after{content:'✓';position:absolute;top:6px;right:8px;
   background:var(--g2);color:var(--g1);width:16px;height:16px;border-radius:50%;
-  display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800}
+  display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800}
 
 /* ── REGION GRID ──────────────────────────────────────────────── */
 .region-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:6px;margin-bottom:12px}
 .rg-btn{background:#fff;border:1.5px solid var(--bd);border-radius:8px;padding:8px 10px;
-  cursor:pointer;text-align:left;transition:all .15s;font-size:12px;font-family:inherit;
+  cursor:pointer;text-align:left;transition:all .15s;font-size:13px;font-family:inherit;
   min-height:44px}
 .rg-btn:hover{border-color:var(--g2)}
 .rg-btn.sel{border-color:var(--g1);background:var(--g3)}
-.rg-name{font-weight:700;color:var(--g1);font-size:11.5px}
-.rg-hsp{color:var(--or);font-weight:700;font-size:11px}
-.rg-zone{color:var(--ts);font-size:10px}
+.rg-name{font-weight:700;color:var(--g1);font-size:12px}
+.rg-hsp{color:var(--or);font-weight:700;font-size:12px}
+.rg-zone{color:var(--ts);font-size:12px}
 
 /* ── RESULT CARDS ─────────────────────────────────────────────── */
 .res-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
@@ -278,26 +285,26 @@ table.t td input:focus{outline:none;border-color:var(--g2);box-shadow:0 0 0 2px 
 .rc2.hi .rc2-lbl{color:var(--g2)}
 .rc2.hi .rc2-val{color:#fff}
 .rc2.hi .rc2-unit{color:rgba(255,255,255,.55)}
-.rc2-lbl{font-size:10px;font-weight:700;color:var(--ts);text-transform:uppercase;
+.rc2-lbl{font-size:12px;font-weight:700;color:var(--ts);text-transform:uppercase;
   letter-spacing:.06em;margin-bottom:4px}
 .rc2-val{font-size:20px;font-weight:800;color:var(--g1);font-family:'Courier New',monospace;line-height:1.1}
-.rc2-unit{font-size:10px;color:var(--ts);margin-top:2px;line-height:1.3}
+.rc2-unit{font-size:12px;color:var(--ts);margin-top:2px;line-height:1.3}
 
 /* ── BATTERY EXPLAINER ────────────────────────────────────────── */
 .bat-explain{background:#fff8e6;border:1px solid #f0c860;border-radius:var(--r);
   padding:12px 14px;margin-top:10px}
-.bat-explain h4{font-size:11px;font-weight:700;color:#7A4000;text-transform:uppercase;
+.bat-explain h4{font-size:12px;font-weight:700;color:#7A4000;text-transform:uppercase;
   letter-spacing:.06em;margin-bottom:8px}
 .bat-row{display:flex;align-items:center;justify-content:space-between;
-  padding:5px 0;border-bottom:1px solid rgba(240,200,96,.3);font-size:12px}
+  padding:5px 0;border-bottom:1px solid rgba(240,200,96,.3);font-size:13px}
 .bat-row:last-child{border-bottom:none;font-weight:700;color:#7A4000}
 .bat-row .bv{font-family:'Courier New',monospace;font-weight:700;color:var(--or)}
-.bat-formula{margin-top:8px;font-size:11px;color:#7A4000;background:rgba(240,200,96,.2);
+.bat-formula{margin-top:8px;font-size:12px;color:#7A4000;background:rgba(240,200,96,.2);
   padding:6px 9px;border-radius:6px;font-family:'Courier New',monospace;line-height:1.7}
 
 /* ── PRICE LIST PANEL ─────────────────────────────────────────── */
 .pl-tabs{display:flex;gap:5px;margin-bottom:10px;flex-wrap:wrap}
-.pl-tab{padding:6px 12px;border:1.5px solid var(--bd);border-radius:20px;font-size:12px;
+.pl-tab{padding:6px 12px;border:1.5px solid var(--bd);border-radius:20px;font-size:13px;
   cursor:pointer;background:#fff;color:var(--ts);font-weight:600;transition:all .15s}
 .pl-tab.active{background:var(--g1);color:#fff;border-color:var(--g1)}
 .pl-upload{border:2px dashed var(--bd);border-radius:var(--r);padding:20px;text-align:center;
@@ -306,15 +313,15 @@ table.t td input:focus{outline:none;border-color:var(--g2);box-shadow:0 0 0 2px 
 .pl-upload.loaded{border-style:solid;border-color:var(--g2)}
 .pl-upload.over{border-color:var(--g2)!important;background:rgba(140,198,63,.1)!important;transform:scale(1.01)}
 .pl-icon{font-size:28px;margin-bottom:7px}
-.pl-name{font-size:13px;font-weight:700;margin-bottom:3px}
-.pl-hint{font-size:11px;color:var(--ts);line-height:1.5}
+.pl-name{font-size:14px;font-weight:700;margin-bottom:3px}
+.pl-hint{font-size:12px;color:var(--ts);line-height:1.5}
 .pl-stats{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;justify-content:center}
-.pl-stat{background:var(--g3);border-radius:6px;padding:3px 9px;font-size:11px;color:var(--g1);font-weight:600}
+.pl-stat{background:var(--g3);border-radius:6px;padding:3px 9px;font-size:12px;color:var(--g1);font-weight:600}
 .pl-reload{margin-top:8px}
 
 /* ── QUOTE TABLE ──────────────────────────────────────────────── */
-.qt{width:100%;border-collapse:collapse;font-size:12px}
-.qt th{background:var(--g1);color:#fff;padding:7px 9px;text-align:left;font-size:10px;
+.qt{width:100%;border-collapse:collapse;font-size:13px}
+.qt th{background:var(--g1);color:#fff;padding:7px 9px;text-align:left;font-size:12px;
   font-weight:700;text-transform:uppercase}
 .qt th.r,.qt td.r{text-align:right}
 .qt td{padding:7px 9px;border-bottom:1px solid #eef3ea;vertical-align:middle}
@@ -333,34 +340,38 @@ table.t td input:focus{outline:none;border-color:var(--g2);box-shadow:0 0 0 2px 
 @media(max-width:540px){.curr-box{grid-template-columns:1fr 1fr;}.curr-box .fld:last-child{grid-column:1/-1}}
 @media(max-width:360px){.curr-box{grid-template-columns:1fr}}
 .curr-box .fld{margin-bottom:0}
-.curr-box label{font-size:10px;font-weight:700;color:var(--ts);text-transform:uppercase;
+.curr-box label{font-size:12px;font-weight:700;color:var(--ts);text-transform:uppercase;
   letter-spacing:.04em;display:block;margin-bottom:3px}
 .curr-box input{border:1px solid #ccc;border-radius:6px;padding:7px 10px;
   font-size:16px;font-weight:700;width:120px;text-align:right;background:#fff;
   font-family:inherit;-webkit-appearance:none}
 .curr-box input:focus{outline:none;border-color:var(--g2);box-shadow:0 0 0 2px rgba(140,198,63,.15)}
-.markup-note{font-size:10px;color:var(--ts);margin-top:3px;line-height:1.4}
+.markup-note{font-size:12px;color:var(--ts);margin-top:3px;line-height:1.4}
 
 /* ── PROPOSAL ─────────────────────────────────────────────────── */
 .proposal-preview{background:var(--g4);border:1px solid var(--bd);border-radius:var(--r);
-  padding:16px;font-size:12px;line-height:1.8;color:var(--tx);white-space:pre-wrap;
+  padding:16px;font-size:13px;line-height:1.8;color:var(--tx);white-space:pre-wrap;
   max-height:340px;overflow-y:auto}
 .proposal-preview strong{color:var(--g1)}
 
 /* ── BENEFITS BAR ─────────────────────────────────────────────── */
+/* Barra de beneficios: OCULTA por decisión de producto, no eliminada.
+   Para volver a mostrarla, cambiar display:none por display:block y devolver
+   el padding-bottom de #main a 210px (y a 220/240px en las media queries). */
 #benefits-bar{
+  display:none;
   position:fixed;bottom:58px;left:0;right:0;z-index:99;
   background:linear-gradient(135deg,var(--g1),#1e4a26);
   padding:9px 14px 8px}
-.ben-title{font-size:9.5px;font-weight:700;color:var(--g2);text-transform:uppercase;
+.ben-title{font-size:11px;font-weight:700;color:var(--g2);text-transform:uppercase;
   letter-spacing:.07em;margin-bottom:6px}
 .ben-pills{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
 .ben-pill{background:rgba(140,198,63,.18);border:1px solid rgba(140,198,63,.35);
-  color:rgba(255,255,255,.9);padding:3px 7px;border-radius:9px;font-size:9.5px;
+  color:rgba(255,255,255,.9);padding:3px 7px;border-radius:9px;font-size:11px;
   line-height:1.3;text-align:center}
 @media(max-width:520px){
   .ben-pills{grid-template-columns:repeat(2,1fr)}
-  .ben-pill{font-size:9px;padding:3px 5px}
+  .ben-pill{font-size:11px;padding:3px 5px}
 }
 
 /* ── BOTTOM NAV ───────────────────────────────────────────────── */
@@ -369,29 +380,29 @@ table.t td input:focus{outline:none;border-color:var(--g2);box-shadow:0 0 0 2px 
   align-items:center;justify-content:space-between;gap:8px;z-index:100;
   box-shadow:0 -2px 12px rgba(0,0,0,.08)}
 
-#step-counter{font-size:11px;color:var(--ts);font-weight:600;white-space:nowrap}
+#step-counter{font-size:12px;color:var(--ts);font-weight:600;white-space:nowrap}
 
 /* ── MISC ─────────────────────────────────────────────────────── */
 .hidden{display:none!important}
 .alert-warn{background:#fff8e6;border:1px solid var(--am);border-radius:7px;
-  padding:9px 12px;font-size:12px;color:#7A4000;margin-bottom:10px}
+  padding:9px 12px;font-size:13px;color:#7A4000;margin-bottom:10px}
 .alert-ok{background:#EEF7E4;border:1px solid var(--g2);border-radius:7px;
-  padding:9px 12px;font-size:12px;color:var(--g1);margin-bottom:10px}
-.tag{display:inline-block;padding:1px 7px;border-radius:4px;font-size:10px;font-weight:700;
+  padding:9px 12px;font-size:13px;color:var(--g1);margin-bottom:10px}
+.tag{display:inline-block;padding:1px 7px;border-radius:4px;font-size:12px;font-weight:700;
   text-transform:uppercase}
 .tg{background:var(--g3);color:var(--g1);border:1px solid rgba(140,198,63,.3)}
 .tb{background:#E6F1FB;color:var(--bl);border:1px solid rgba(21,101,192,.2)}
 .to{background:#FFF4E0;color:#7A3B00;border:1px solid rgba(232,160,32,.3)}
 .divider{border:none;border-top:1px solid var(--bd);margin:14px 0}
-.section-note{font-size:11px;color:var(--ts);line-height:1.6;margin-top:5px}
+.section-note{font-size:12px;color:var(--ts);line-height:1.6;margin-top:5px}
 .cons-total-bar{background:var(--g3);border:1px solid rgba(140,198,63,.35);border-radius:8px;
-  padding:9px 13px;font-size:12px;color:var(--g1)}
+  padding:9px 13px;font-size:13px;color:var(--g1)}
 
 @media(max-width:480px){
-  #main{padding:10px 10px 220px}
+  #main{padding:14px 12px 88px}
   .step-title{font-size:17px}
   .rc2-val{font-size:17px}
-  .btn{font-size:12px;padding:8px 13px}
+  .btn{font-size:13px;padding:8px 13px}
   .mode-toggle{flex-direction:column}
   .radio-cards{grid-template-columns:1fr 1fr}
   .res-grid{grid-template-columns:1fr 1fr}
@@ -403,7 +414,7 @@ table.t td input:focus{outline:none;border-color:var(--g2);box-shadow:0 0 0 2px 
   .res-grid{grid-template-columns:1fr}
   .stp-label{display:none}
   .stp-inner{min-width:36px;padding:7px 4px 5px}
-  #main{padding-bottom:240px}
+  #main{padding-bottom:96px}
 }
 
 /* ── MOBILE CARDS: tabla de consumos y tabla de cotización ───────────────
@@ -448,14 +459,14 @@ table.t td input:focus{outline:none;border-color:var(--g2);box-shadow:0 0 0 2px 
   #items-body tr:not(.empty-row) td:nth-child(3)::before,
   #items-body tr:not(.empty-row) td:nth-child(4)::before,
   #items-body tr:not(.empty-row) td:nth-child(5)::before{
-    font-size:9px;font-weight:700;color:var(--ts);text-transform:uppercase;letter-spacing:.04em}
+    font-size:11px;font-weight:700;color:var(--ts);text-transform:uppercase;letter-spacing:.04em}
 
   /* Fila de totales del día (#items-foot .t-total): bloque propio, con el
      Wh/día bien visible, sin depender de scrollear la tabla. */
   #items-foot tr.t-total{display:block;grid-template-columns:none;background:var(--g4);
     border:1px solid var(--g2);border-radius:10px;padding:11px 13px;margin-top:2px}
   #items-foot tr.t-total td{display:block;grid-area:unset;width:auto!important;padding:1px 0;border:none}
-  #items-foot tr.t-total td:nth-child(1){font-size:11px;font-weight:700;color:var(--g1);
+  #items-foot tr.t-total td:nth-child(1){font-size:12px;font-weight:700;color:var(--g1);
     text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px}
   #items-foot tr.t-total td:nth-child(2){display:inline-block;color:var(--ts);margin-right:10px}
   #items-foot tr.t-total td:nth-child(2)::before{content:'Esencial: '}
@@ -485,9 +496,9 @@ table.t td input:focus{outline:none;border-color:var(--g2);box-shadow:0 0 0 2px 
   .qt-quote tbody td:nth-child(4)::before{content:'IVA %'}
   .qt-quote tbody td:nth-child(2)::before,
   .qt-quote tbody td:nth-child(3)::before,
-  .qt-quote tbody td:nth-child(4)::before{font-size:9px;font-weight:700;color:var(--ts);
+  .qt-quote tbody td:nth-child(4)::before{font-size:11px;font-weight:700;color:var(--ts);
     text-transform:uppercase;letter-spacing:.04em}
-  .qt-quote tbody td:nth-child(5)::before{content:'Neto ítem';font-size:9px;font-weight:700;
+  .qt-quote tbody td:nth-child(5)::before{content:'Neto ítem';font-size:11px;font-weight:700;
     color:var(--ts);text-transform:uppercase}
 
   /* Pie (#q-sub-usd, #q-mark-usd, #q-sale-usd, #q-iva-usd, #q-grand-usd,
@@ -500,7 +511,7 @@ table.t td input:focus{outline:none;border-color:var(--g2);box-shadow:0 0 0 2px 
   .qt-quote tfoot tr td{display:none;border:none;padding:0;width:auto!important}
   .qt-quote tfoot tr td:nth-child(1){display:block;flex:1;padding-right:8px}
   .qt-quote tfoot tr td:nth-child(2){display:block;font-weight:700;text-align:right;white-space:nowrap}
-  .qt-quote tfoot tr td:nth-child(3){display:block;font-size:10px!important;color:var(--ts);
+  .qt-quote tfoot tr td:nth-child(3){display:block;font-size:12px!important;color:var(--ts);
     margin-left:8px;text-align:right;white-space:nowrap}
   .qt-quote tfoot tr td:nth-child(3):empty{display:none}
   .qt-quote tfoot tr.grand-row{background:var(--g1);border-bottom:none;padding:13px}
@@ -1321,7 +1332,7 @@ ${tip('&#128161; ¿Cómo se calcula el consumo?',
 <div class="add-bar">
   <select id="cat-sel"><option value="">— Catálogo de equipos —</option>${CAT.map(c=>`<option value="${esc(c.n)}">${esc(c.n)} (${c.w}W)</option>`).join('')}</select>
   <button class="btn btn-g btn-sm" onclick="addFromCat()">+ Agregar</button>
-  <span style="font-size:11px;color:var(--ts);align-self:center">ó</span>
+  <span style="font-size:12px;color:var(--ts);align-self:center">ó</span>
   <input id="cu-dev" placeholder="Equipo personalizado" style="flex:1;min-width:110px;padding:6px 9px;border:1px solid #ccc;border-radius:7px;font-size:16px">
   <input id="cu-w" type="number" placeholder="W" class="w60" style="padding:6px 9px;border:1px solid #ccc;border-radius:7px;font-size:16px;width:75px">
   <button class="btn btn-ghost btn-sm" onclick="addCustom()">+ Personalizado</button>
@@ -1502,7 +1513,7 @@ function iUpdateTotals(){
   let whEs=0;S.items.forEach(it=>{if(it.esencial)whEs+=it.qty*it.w*it.hd;});
   if(foot)foot.innerHTML=totWh>0?`<tr class="t-total">
     <td colspan="4" style="padding:7px 8px">TOTAL DEL D&Iacute;A</td>
-    <td class="mono" style="text-align:center;font-size:11px">${whEs>0?fa(whEs)+' Wh':'—'}</td>
+    <td class="mono" style="text-align:center;font-size:12px">${whEs>0?fa(whEs)+' Wh':'—'}</td>
     <td class="mono" style="text-align:right;font-size:13px">${fa(totWh)} Wh &nbsp;|&nbsp; ${f2(totWh/1000)} kWh</td>
     <td></td></tr>`:'';
   const sum=$('cons-summary');
@@ -2011,7 +2022,7 @@ Sin inyecci&oacute;n s&oacute;lo se aprovecha el consumo diurno, y eso cambia cu
   <div class="bat-row"><span>Tipo de bater&iacute;a seleccionada</span><span class="bv">${R.bat.n}</span></div>
   <div class="bat-row"><span>Autonom&iacute;a requerida</span><span class="bv">${R.auto} h = ${f2(R.auto/24)} d&iacute;as</span></div>
   <div class="bat-row"><span>Consumo respaldado</span><span class="bv">${fa(Math.round(R.whRespDia))} Wh/d&iacute;a (${Math.round(R.fracResp*100)}%)</span></div>
-  <div class="bat-row"><span>Criterio de respaldo</span><span class="bv" style="font-size:11px;text-transform:none">${R.respaldoFuente}</span></div>
+  <div class="bat-row"><span>Criterio de respaldo</span><span class="bv" style="font-size:12px;text-transform:none">${R.respaldoFuente}</span></div>
   <div class="bat-row"><span>Energ&iacute;a a almacenar (bruta)</span><span class="bv">${fa(Math.round(R.whStore))} Wh</span></div>
   <div class="bat-row"><span>DoD m&aacute;x. (${R.bat.chem})</span><span class="bv">${R.bat.DoD*100}%</span></div>
   <div class="bat-row"><span>Eficiencia bat. round-trip</span><span class="bv">${ETA_bat*100}%</span></div>
@@ -2142,7 +2153,7 @@ function s7(){
   id="iv-${it.id}" data-qid="${it.id}" oninput="qIva(this)" min="0" max="50" style="width:58px;text-align:center"
   title="IVA individual (%)"></td>
 <td class="r mono"><span id="qt-${it.id}">${tot?'USD '+fa(Math.round(tot)):'<span style="color:#bbb">—</span>'}</span></td>
-<td class="r mono" style="font-size:11px;color:var(--ts)"><span id="qa-${it.id}">${tot?'ARS '+fa(Math.round(tot*S.tc)):'—'}</span></td>
+<td class="r mono" style="font-size:12px;color:var(--ts)"><span id="qa-${it.id}">${tot?'ARS '+fa(Math.round(tot*S.tc)):'—'}</span></td>
 <td><button class="btn-del" onclick="delQuoteRow(${it.id})" title="Eliminar ítem">✕</button></td>
 </tr>`;
   }).join('');
@@ -2173,7 +2184,7 @@ ${tip('Cómo usar las listas de precios y el Markup distribuidor',
     <div style="padding:8px 10px;border:1px solid #ccc;border-radius:7px;background:#fafafa;font-size:12px;line-height:1.5">
       Paneles <b>${S.params.ivaPaneles}%</b> &bull; Resto <b>${S.params.ivaGeneral}%</b>
     </div>
-    <div class="markup-note" style="font-size:9.5px">
+    <div class="markup-note" style="font-size:11px">
       Se aplica a &iacute;tems nuevos y es ajustable por fila.
       <a href="#" onclick="event.preventDefault();openParams()" style="color:var(--g1)">Cambiar al&iacute;cuotas</a>
     </div>
@@ -2221,7 +2232,7 @@ ${tip('Cómo usar las listas de precios y el Markup distribuidor',
       <tr class="tot-row">
         <td colspan="4">Subtotal materiales (neto)</td>
         <td class="r mono" id="q-sub-usd">${T.net>0?'USD '+fa(Math.round(T.net)):'—'}</td>
-        <td class="r mono" style="font-size:11px" id="q-sub-ars">${T.net>0?'ARS '+fa(Math.round(T.net*S.tc)):'—'}</td>
+        <td class="r mono" style="font-size:12px" id="q-sub-ars">${T.net>0?'ARS '+fa(Math.round(T.net*S.tc)):'—'}</td>
         <td></td></tr>
       <tr class="tot-row">
         <td colspan="4">+ Markup distribuidor <span id="q-mark-pct">${S.markup}</span>%</td>
@@ -2232,13 +2243,13 @@ ${tip('Cómo usar las listas de precios y el Markup distribuidor',
         <td class="r mono" id="q-sale-usd">${T.net>0?'USD '+fa(Math.round(T.sale)):'—'}</td>
         <td></td><td></td></tr>
       <tr class="tot-row">
-        <td colspan="4" style="font-size:11px;color:var(--ts)">+ IVA (por ítem, sobre precio de venta)</td>
-        <td class="r mono" id="q-iva-usd" style="font-size:11px;color:var(--ts)">${T.net>0?'USD '+fa(Math.round(T.ivaAmt)):'—'}</td>
+        <td colspan="4" style="font-size:12px;color:var(--ts)">+ IVA (por ítem, sobre precio de venta)</td>
+        <td class="r mono" id="q-iva-usd" style="font-size:12px;color:var(--ts)">${T.net>0?'USD '+fa(Math.round(T.ivaAmt)):'—'}</td>
         <td></td><td></td></tr>
       <tr class="grand-row">
         <td colspan="4" style="font-size:13px;font-weight:800">TOTAL FINAL</td>
         <td class="r mono" style="font-size:14px" id="q-grand-usd">${T.net>0?'USD '+fa(Math.round(T.grand)):'Carg\u00e1 precios'}</td>
-        <td class="r" style="font-size:11px;color:rgba(255,255,255,.65)" id="q-grand-ars">${T.net>0?'ARS '+fa(Math.round(T.grand*S.tc)):'—'}</td>
+        <td class="r" style="font-size:12px;color:rgba(255,255,255,.65)" id="q-grand-ars">${T.net>0?'ARS '+fa(Math.round(T.grand*S.tc)):'—'}</td>
         <td></td>
       </tr>
     </tfoot>
@@ -2826,7 +2837,7 @@ function s9(){
   <button class="btn btn-dk btn-full" style="max-width:320px;margin:0 auto;font-size:14px;padding:12px" onclick="exportPDF()">
     &#8659; Descargar PDF profesional
   </button>
-  <div style="margin-top:10px;font-size:11px;color:var(--ts)">Incluye datos del cliente, sistema, cotizaci\u00f3n y propuesta.</div>
+  <div style="margin-top:10px;font-size:12px;color:var(--ts)">Incluye datos del cliente, sistema, cotizaci\u00f3n y propuesta.</div>
 </div>
 <div class="card">
   <div class="card-title">Resumen del proyecto</div>
