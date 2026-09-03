@@ -116,6 +116,20 @@ input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
 .stp-connector{width:20px;height:2px;background:var(--bd);flex-shrink:0;margin-top:-18px}
 .stp.done .stp-connector{background:var(--g1)}
 
+/* ── STEPPER MOBILE ───────────────────────────────────────────── */
+/* Los 9 pasos necesitan 793px; en 375px se ve poco más de un tercio y no
+   hay noción de en qué paso se está. Por debajo de 680px se oculta la fila
+   de círculos y queda sólo la barra de progreso (#prog-bar/#prog-fill, que
+   ya existía) más un indicador de texto "Paso X de 9 · Etiqueta". El
+   stepper completo de 9 pasos se conserva desde tablet/escritorio para
+   arriba, donde entra sin recortarse. */
+#step-mobile{display:none;padding:7px 14px 9px}
+#step-mobile-label{font-size:13px;font-weight:700;color:var(--g1)}
+@media(max-width:680px){
+  #step-list{display:none}
+  #step-mobile{display:block}
+}
+
 /* ── PROGRESS ─────────────────────────────────────────────────── */
 #prog-bar{height:3px;background:var(--bd)}
 #prog-fill{height:100%;background:linear-gradient(90deg,var(--g1),var(--g2));
@@ -528,6 +542,7 @@ table.t td input:focus{outline:none;border-color:var(--g2);box-shadow:0 0 0 2px 
 <div id="stepper">
   <div id="prog-bar"><div id="prog-fill"></div></div>
   <div id="step-list"></div>
+  <div id="step-mobile"><span id="step-mobile-label"></span></div>
 </div>
 
 <!-- ── MAIN CONTENT ───────────────────────────────────────────── -->
@@ -1175,6 +1190,8 @@ function renderStepper(){
   }).join('');
   $('prog-fill').style.width=((CUR/TOTAL)*100)+'%';
   $('step-counter').textContent='Paso '+CUR+' de '+TOTAL;
+  const stepActual=STEPS.find(s=>s.n===CUR);
+  $('step-mobile-label').textContent='Paso '+CUR+' de '+TOTAL+(stepActual?' · '+stepActual.label:'');
   $('btn-prev').disabled=CUR===1;
   $('btn-next').innerHTML=CUR===TOTAL?'Finalizar &#10003;':'Siguiente &#8594;';
   $('btn-next').disabled=CUR===TOTAL;
