@@ -195,7 +195,7 @@ table.t th{background:var(--g4);padding:6px 8px;text-align:left;font-size:10px;
   text-transform:uppercase;white-space:nowrap}
 table.t td{padding:5px 7px;border-bottom:1px solid #f0f5ee;vertical-align:middle}
 table.t tr:hover td{background:#fafdf8}
-table.t td input{width:100%;border:1px solid #e0e8d8;border-radius:5px;
+table.t td input:not([type=checkbox]){width:100%;border:1px solid #e0e8d8;border-radius:5px;
   padding:5px 6px;font-size:16px;text-align:right;background:#fff;
   font-family:inherit;-webkit-appearance:none;min-height:44px}
 table.t td input.nm{text-align:left}
@@ -211,7 +211,19 @@ table.t td input:focus{outline:none;border-color:var(--g2);box-shadow:0 0 0 2px 
    <label> envuelve toda la celda para que el área activa sea la celda entera. */
 .chk-cell{display:flex;align-items:center;justify-content:center;
   min-width:44px;min-height:44px;cursor:pointer}
-.chk-cell input{width:19px;height:19px;cursor:pointer}
+/* El área táctil de 44px la da el <label>; el cuadrito es sólo el indicador
+   visual, con un estado marcado que se distinga a simple vista. El tilde se
+   dibuja con bordes para no depender de ninguna fuente. */
+.chk-cell input[type=checkbox]{appearance:none;-webkit-appearance:none;
+  width:24px;height:24px;min-height:0;margin:0;padding:0;flex-shrink:0;
+  border:2px solid #b9c7ad;border-radius:6px;background:#fff;cursor:pointer;
+  display:grid;place-content:center;transition:background .15s,border-color .15s}
+.chk-cell input[type=checkbox]::after{content:'';width:11px;height:6px;
+  border-left:2.5px solid var(--g1);border-bottom:2.5px solid var(--g1);
+  transform:rotate(-45deg) translate(1px,-2px);opacity:0;transition:opacity .15s}
+.chk-cell input[type=checkbox]:checked{background:var(--g2);border-color:var(--g1)}
+.chk-cell input[type=checkbox]:checked::after{opacity:1}
+.chk-cell input[type=checkbox]:focus-visible{outline:2px solid var(--g2);outline-offset:2px}
 
 /* ── ADD ROW ──────────────────────────────────────────────────── */
 .add-bar{display:flex;gap:7px;margin-bottom:9px;flex-wrap:wrap}
@@ -306,7 +318,7 @@ table.t td input:focus{outline:none;border-color:var(--g2);box-shadow:0 0 0 2px 
   font-weight:700;text-transform:uppercase}
 .qt th.r,.qt td.r{text-align:right}
 .qt td{padding:7px 9px;border-bottom:1px solid #eef3ea;vertical-align:middle}
-.qt td input{border:1px solid #ddd;border-radius:5px;padding:5px 7px;font-size:16px;
+.qt td input:not([type=checkbox]){border:1px solid #ddd;border-radius:5px;padding:5px 7px;font-size:16px;
   text-align:right;width:100px;font-family:'Courier New',monospace;background:#fff;
   -webkit-appearance:none;min-height:44px}
 .qt td input:focus{outline:none;border-color:var(--g2);box-shadow:0 0 0 2px rgba(140,198,63,.15)}
@@ -383,7 +395,7 @@ table.t td input:focus{outline:none;border-color:var(--g2);box-shadow:0 0 0 2px 
   .mode-toggle{flex-direction:column}
   .radio-cards{grid-template-columns:1fr 1fr}
   .res-grid{grid-template-columns:1fr 1fr}
-  .qt td input{width:70px}
+  .qt td input:not([type=checkbox]){width:70px}
   .pl-tabs{overflow-x:auto;flex-wrap:nowrap;padding-bottom:2px}
 }
 @media(max-width:360px){
@@ -420,7 +432,7 @@ table.t td input:focus{outline:none;border-color:var(--g2);box-shadow:0 0 0 2px 
     border-radius:10px;padding:12px;margin-bottom:9px}
   #items-body tr.empty-row{display:block;text-align:center}
   table.t td{display:block;padding:0;border:none;min-width:0;width:auto!important}
-  table.t td input{width:100%!important}
+  table.t td input:not([type=checkbox]){width:100%!important}
   #items-body td:nth-child(1){grid-area:name}
   #items-body td:nth-child(2){grid-area:w}
   #items-body td:nth-child(3){grid-area:qty}
@@ -459,7 +471,7 @@ table.t td input:focus{outline:none;border-color:var(--g2);box-shadow:0 0 0 2px 
     column-gap:8px;row-gap:6px;background:#fff;border:1px solid var(--bd);
     border-radius:10px;padding:12px;margin-bottom:9px}
   .qt-quote tbody td{display:flex;flex-direction:column;gap:3px;padding:0;border:none;width:auto!important}
-  .qt-quote tbody td input{width:100%!important}
+  .qt-quote tbody td input:not([type=checkbox]){width:100%!important}
   .qt-quote tbody td:nth-child(1){grid-area:name}
   .qt-quote tbody td:nth-child(2){grid-area:qty}
   .qt-quote tbody td:nth-child(3){grid-area:price}
