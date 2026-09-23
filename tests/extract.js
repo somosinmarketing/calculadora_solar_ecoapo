@@ -20,9 +20,10 @@ module.exports=function cargarMotor(){
     +src.match(/function quoteTotals\(\)\{[\s\S]*?\n\}/)[0]
     +src.match(/function calcROI\(R,T\)\{[\s\S]*?\n\}/)[0]
     +src.match(/function paramsModificados\(\)\{[\s\S]*?\n\}/)[0]
-    +src.match(/function ivaDeTipo\(tipo\)\{[\s\S]*?\n\}/)[0];
+    +src.match(/function ivaDeTipo\(tipo\)\{[\s\S]*?\n\}/)[0]
+    +corte(src,'// ── QUOTE: QUÉ VE CADA DESTINATARIO','// ── QUOTE: SINCRONIZACIÓN');
   const ctx={module:{},console};
   vm.createContext(ctx);
-  vm.runInContext(code+'\n;this.calc=calc;this.quoteTotals=quoteTotals;this.calcROI=calcROI;this.paramsModificados=paramsModificados;this.ivaDeTipo=ivaDeTipo;this.PARAMS_DEF=PARAMS_DEF;this.S=S;',ctx);
+  vm.runInContext(code+'\n;this.calc=calc;this.quoteTotals=quoteTotals;this.calcROI=calcROI;this.paramsModificados=paramsModificados;this.ivaDeTipo=ivaDeTipo;this.lineasCliente=lineasCliente;this.pedidoEcoapo=pedidoEcoapo;this.PARAMS_DEF=PARAMS_DEF;this.S=S;',ctx);
   return ctx;
 };

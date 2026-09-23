@@ -1,6 +1,6 @@
 // Tests del motor de dimensionado y del cálculo de totales.
 //   node tests/unit.js
-const {calc,quoteTotals,calcROI,paramsModificados,ivaDeTipo,PARAMS_DEF,S}=require('./extract.js')();
+const {calc,quoteTotals,calcROI,paramsModificados,ivaDeTipo,lineasCliente,pedidoEcoapo,PARAMS_DEF,S}=require('./extract.js')();
 
 let fail=0;
 const f1v=n=>Math.round(n*10)/10;
@@ -344,6 +344,54 @@ base(); S.sysType='ongrid'; S.inyecta=false; S.items=casa(); R=calc();
 chk('On Grid sin inyección sigue en el diurno', Math.abs(R.whBase-4000)<1e-6, R.critFV);
 base(); S.sysType='ongrid'; S.inyecta=true; S.items=casa(); R=calc();
 chk('On Grid con inyección sigue en 24 h', Math.abs(R.whBase-8000)<1e-6, R.critFV);
+
+console.log('\n=== Presupuesto al cliente: precios de venta, nunca costos ===');
+// El cliente del instalador ve el precio con el markup adentro. Las líneas
+// tienen que sumar lo mismo que el Paso 7, sin exponer costo ni markup.
+base(); S.markup=30;
+S.quoteItems=[
+  {type:'panel',comp:'Panel 550 Wp',price:'100',qty:8,iva:10.5},
+  {type:'inv',  comp:'Inversor 3.000 W',price:'600',qty:1,iva:21},
+  {type:'mdo',  comp:'Mano de obra',price:'400',qty:1,iva:21},
+  {type:'cab',  comp:'Cableado',price:'',qty:1,iva:21}];
+T=quoteTotals(); let LC=lineasCliente();
+chk('el unitario del cliente es costo × (1 + markup)', Math.abs(LC.lineas[0].unit-130)<1e-9,
+    'costo 100 + 30% = '+LC.lineas[0].unit);
+chk('ninguna línea muestra el costo', LC.lineas.every((l,i)=>l.unit!==[100,600,400][i]));
+const sumLin=LC.lineas.reduce((t,l)=>t+l.sub,0);
+chk('las líneas suman el precio de venta del Paso 7', Math.abs(sumLin-T.sale)<1e-6,
+    sumLin+' = '+T.sale);
+const sumIva=LC.porAlicuota.reduce((t,a)=>t+a.monto,0);
+chk('el IVA por alícuota suma el IVA del Paso 7', Math.abs(sumIva-T.ivaAmt)<1e-6,
+    LC.porAlicuota.map(a=>a.alic+'%: '+a.monto.toFixed(2)).join(' + ')+' = '+T.ivaAmt.toFixed(2));
+chk('discrimina las dos alícuotas', LC.porAlicuota.map(a=>a.alic).join()==='10.5,21');
+chk('los ítems sin precio no aparecen en el presupuesto', LC.lineas.length===3);
+
+console.log('\n=== Pedido a EcoApo: precio de lista, sin mano de obra ===');
+let PE=pedidoEcoapo();
+chk('no incluye la mano de obra', !PE.lineas.some(l=>/Mano de obra/.test(l.comp)),
+    PE.lineas.map(l=>l.comp).join(', '));
+chk('va a precio de lista, sin markup', Math.abs(PE.net-(800+600))<1e-9, 'neto USD '+PE.net);
+chk('IVA sobre el precio de lista', Math.abs(PE.ivaAmt-(800*0.105+600*0.21))<1e-9,
+    'IVA USD '+PE.ivaAmt.toFixed(2));
+chk('el ítem sin precio va al pedido como a cotizar', PE.faltan===1&&PE.lineas.some(l=>l.comp==='Cableado'&&l.unit===0));
+S.markup=80;
+chk('el markup del instalador no cambia el pedido', Math.abs(pedidoEcoapo().total-PE.total)<1e-9);
+
+// El producto de lista asociado no debe sobrevivir a un cambio de diseño:
+// el pedido saldría con el código de un equipo que ya no es el del proyecto.
+base(); S.items=casa(); R=calc();
+S.quoteItems=[{type:'panel',comp:'Panel solar '+R.panWp+' Wp',qty:R.nPan,price:'100',iva:10.5,id:1,
+  _autoMatched:'Panel X '+R.panWp+'W [PX'+R.panWp+']'}];
+const syncQ=require('fs').readFileSync(require('path').join(__dirname,'..','calculadorasolar.html'),'utf8')
+  .match(/function syncQuoteWithDesign\(R\)\{[\s\S]*?\n\}/)[0];
+const vm=require('vm'); const ctxQ={S,fa:n=>String(Math.round(n)),uid:()=>9,ivaDeTipo};
+vm.createContext(ctxQ); vm.runInContext(syncQ+';this.sync=syncQuoteWithDesign;',ctxQ);
+ctxQ.sync(R);
+chk('si el diseño no cambia, conserva el producto de lista', !!S.quoteItems[0]._autoMatched);
+S.panWp=450; R=calc(); ctxQ.sync(R);
+chk('si cambia el panel, suelta el producto de lista', !S.quoteItems[0]._autoMatched,
+    S.quoteItems[0].comp);
 
 console.log(fail===0?'\n===== TESTS UNITARIOS OK =====':'\n===== '+fail+' FALLAS =====');
 process.exit(fail?1:0);

@@ -71,7 +71,23 @@ las interpolan, para que la fórmula que se muestra sea siempre la que se usa.
 | Superficie | 200 W/m² de módulo, × 1,3 para separación entre filas |
 | Repago | `inversión ÷ (kWh aprovechados × precio kWh × porción evitable)`. No aplica en Off Grid |
 | MPPT | `I = P_paneles ÷ V_sistema × 1,25` |
-| Cotización | markup sobre el costo neto; IVA sobre el precio de venta |
+| Cotización | markup sobre el precio de lista; IVA sobre el precio de venta, discriminado por alícuota |
+
+## Presupuesto y pedido
+
+El simulador lo usan instaladores que cotizan a sus clientes y le compran los
+materiales a EcoApo. La misma cotización genera tres vistas, y cada una muestra
+sólo lo que le corresponde a su destinatario:
+
+| Dónde | Para quién | Precios |
+|---|---|---|
+| Paso 7 | El instalador | Lista de EcoApo, markup, precio de venta, IVA. Es su pantalla de trabajo |
+| Paso 8 y PDF del Paso 9 | El cliente del instalador | **Sólo precios de venta**: el markup va dentro de cada unitario. Nunca el costo ni el porcentaje de markup. IVA discriminado por alícuota |
+| Pedido a EcoApo (Paso 9) | EcoApo | Precio de lista, **sin la mano de obra** y **sin datos del cliente final**. Lleva el resumen técnico del sistema y, si hubo coincidencia con la lista cargada, el producto y su código |
+
+El pedido se descarga en PDF o se copia como texto para mandarlo por WhatsApp
+o mail. Si el diseño cambia un componente, el producto de lista que tenía
+asociado se descarta, para que el pedido no salga con el código de otro equipo.
 
 ### Criterios de cálculo
 

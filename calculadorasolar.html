@@ -2186,9 +2186,9 @@ function s7(){
   <div class="step-title">&#128181; Precio del sistema</div>
   <div class="step-sub">Carg&aacute; precios y obten&eacute; la cotizaci&oacute;n en USD y ARS.</div>
 </div>
-${tip('Cómo usar las listas de precios y el Markup distribuidor',
+${tip('Cómo usar las listas de precios y tu markup',
   'Cargá la lista de precios de tu proveedor (CSV, XLSX, TSV o TXT). El sistema detecta las columnas automáticamente y completa los precios que puede.',
-  `<b>Markup distribuidor:</b> porcentaje que se agrega al costo del proveedor para obtener el precio de venta.<br>
+  `<b>Markup del instalador:</b> porcentaje que agreg&aacute;s sobre el precio de lista de EcoApo para obtener tu precio de venta.<br>
   <b>Fórmula:</b> Precio venta = Costo proveedor × (1 + Markup/100)<br><br>
   Ejemplo: USD 1.000 de costo + 30% markup = USD 1.300 precio de venta.<br><br>
   <b>Diferencia con "margen":</b> El markup se calcula sobre el costo; el margen sobre el precio de venta. Acá usamos <b>markup</b> para mayor precisión comercial.`)}
@@ -2198,7 +2198,7 @@ ${tip('Cómo usar las listas de precios y el Markup distribuidor',
     <input id="tc-val" type="number" value="${S.tc}" min="1" oninput="tcChange(this)">
   </div>
   <div class="fld">
-    <label>Markup distribuidor %</label>
+    <label>Markup del instalador %</label>
     <input id="markup-val" type="number" value="${S.markup}" min="0" max="500" oninput="markupChange(this)">
     <div class="markup-note">Costo proveedor + ${S.markup}% = precio de venta</div>
   </div>
@@ -2258,7 +2258,7 @@ ${tip('Cómo usar las listas de precios y el Markup distribuidor',
         <td class="r mono" style="font-size:12px" id="q-sub-ars">${T.net>0?'ARS '+fa(Math.round(T.net*S.tc)):'—'}</td>
         <td></td></tr>
       <tr class="tot-row">
-        <td colspan="4">+ Markup distribuidor <span id="q-mark-pct">${S.markup}</span>%</td>
+        <td colspan="4">+ Markup del instalador <span id="q-mark-pct">${S.markup}</span>%</td>
         <td class="r mono" id="q-mark-usd">${T.net>0&&S.markup>0?'USD '+fa(Math.round(T.markupAmt)):'—'}</td>
         <td></td><td></td></tr>
       <tr class="tot-row">
@@ -2277,6 +2277,9 @@ ${tip('Cómo usar las listas de precios y el Markup distribuidor',
       </tr>
     </tfoot>
   </table></div>
+  <div class="section-note" style="margin-top:10px">&#128274; Esta pantalla es s&oacute;lo para vos.
+  El presupuesto de tu cliente muestra precios de venta con el markup ya incluido: tus costos y tu
+  markup no aparecen. El pedido a EcoApo sale aparte, a precio de lista, en el Paso 9.</div>
 </div>
 ${roiHtml(R,T)}`;
 }
@@ -2377,6 +2380,50 @@ function quoteTotals(){
   return{net,markupAmt,sale,ivaAmt,grand:sale+ivaAmt,allOk};
 }
 
+// ── QUOTE: QUÉ VE CADA DESTINATARIO ────────────────────────────────────────
+// La misma cotización va a dos destinatarios que no deben ver lo mismo:
+//   - El cliente del instalador ve precios de VENTA: el markup ya va dentro de
+//     cada precio unitario. Nunca ve el costo ni el porcentaje de markup.
+//   - EcoApo recibe el pedido a precio de LISTA, sin la mano de obra (no la
+//     vende) y sin datos del cliente final.
+// Las líneas de venta suman T.sale y el IVA por alícuota suma T.ivaAmt: es la
+// misma cuenta que quoteTotals(), sólo que abierta por fila.
+const m2=n=>(Number(n)||0).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2});
+const alicTxt=a=>String(a).replace('.',',')+'%';
+function agruparIva(porAlic){
+  return Object.keys(porAlic).map(Number).filter(a=>a>0).sort((a,b)=>a-b)
+    .map(a=>({alic:a,monto:porAlic[a]}));
+}
+function lineasCliente(){
+  const k=1+S.markup/100;
+  const lineas=[],porAlic={};
+  S.quoteItems.forEach(it=>{
+    const p=parseFloat(it.price)||0,q=parseInt(it.qty)||0;
+    if(!(p>0&&q>0))return;
+    const iva=parseFloat(it.iva)||0;
+    const unit=p*k,sub=unit*q;
+    lineas.push({comp:it.comp,qty:q,unit,iva,sub});
+    porAlic[iva]=(porAlic[iva]||0)+sub*iva/100;
+  });
+  return{lineas,porAlicuota:agruparIva(porAlic)};
+}
+// La mano de obra la pone el instalador: no se le pide a EcoApo.
+const FUERA_DEL_PEDIDO=new Set(['mdo']);
+function pedidoEcoapo(){
+  let net=0,faltan=0;
+  const lineas=[],porAlic={};
+  S.quoteItems.forEach(it=>{
+    if(FUERA_DEL_PEDIDO.has(it.type))return;
+    const q=parseInt(it.qty)||0;if(q<=0)return;
+    const p=parseFloat(it.price)||0,iva=parseFloat(it.iva)||0,sub=p*q;
+    if(p>0){net+=sub;porAlic[iva]=(porAlic[iva]||0)+sub*iva/100;}else faltan++;
+    lineas.push({comp:it.comp,prod:it._autoMatched||'',qty:q,unit:p,iva,sub});
+  });
+  const porAlicuota=agruparIva(porAlic);
+  const ivaAmt=porAlicuota.reduce((t,a)=>t+a.monto,0);
+  return{lineas,net,ivaAmt,total:net+ivaAmt,porAlicuota,faltan};
+}
+
 // ── QUOTE: SINCRONIZACIÓN CON EL DISEÑO ────────────────────────────────────
 // Mantiene los ítems auto-generados alineados con el dimensionado actual
 // (cantidades y descripciones), preservando precios, IVA, ítems agregados a
@@ -2406,7 +2453,11 @@ function syncQuoteWithDesign(R){
     const prev=S.quoteItems.find(it=>it.type===w.type);
     if(!prev)return{...w,price:'',iva:ivaDeTipo(w.type),id:uid(),auto:true};
     // Preservar lo que cargó el usuario; actualizar lo que depende del diseño.
-    return{...prev,type:w.type,qty:w.qty,comp:prev._edited?prev.comp:w.comp,auto:true};
+    const comp=prev._edited?prev.comp:w.comp;
+    // Si el diseño cambió el componente, el producto de lista asociado ya no
+    // corresponde: el pedido saldría con el código de otro equipo.
+    const match=comp===prev.comp?prev._autoMatched:undefined;
+    return{...prev,type:w.type,qty:w.qty,comp,_autoMatched:match,auto:true};
   });
   S.quoteItems=out.concat(extras);
 }
@@ -2472,7 +2523,7 @@ function delQuoteRow(id){
 function qComp(inp){
   const id=parseInt(inp.dataset.qid);
   const it=S.quoteItems.find(x=>x.id===id);
-  if(it){it.comp=inp.value;it._edited=true;}
+  if(it){it.comp=inp.value;it._edited=true;it._autoMatched=undefined;}
 }
 function qQty(inp){
   const id=parseInt(inp.dataset.qid);
@@ -2709,6 +2760,7 @@ function s8(){
   const sys={offgrid:'Off Grid (autónomo)',ongrid:'On Grid (conectado a la red)',hybrid:'Híbrido (red + baterías)'}[R.sysType];
   const T=quoteTotals();   // mismo cálculo que el Paso 7 y el PDF
   const tot=T.grand;
+  const LC=lineasCliente();  // precios de venta: el cliente no ve costos
   const propText=`PROPUESTA TÉCNICA PRELIMINAR
 ECOAPO · Energía Solar Fotovoltaica
 Fecha: ${now}
@@ -2751,14 +2803,14 @@ ${R.cobObj<1?'Cobertura solar:   '+Math.round(R.cobObj*100)+'% del consumo; el r
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ESTIMACIÓN ECONÓMICA
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${tot>0?`Materiales (neto): USD ${Math.round(T.net).toLocaleString('es-AR')}
-Markup ${String(S.markup).padEnd(3)}%:        USD ${Math.round(T.markupAmt).toLocaleString('es-AR')}
-Precio sin IVA:    USD ${Math.round(T.sale).toLocaleString('es-AR')}
-IVA:               USD ${Math.round(T.ivaAmt).toLocaleString('es-AR')}
-TOTAL ESTIMADO:    USD ${Math.round(tot).toLocaleString('es-AR')}
+${tot>0?`${LC.lineas.map(l=>l.qty+' × '+l.comp+'\n    USD '+m2(l.unit)+' c/u · IVA '+alicTxt(l.iva)+' · USD '+m2(l.sub)).join('\n')}
+
+Subtotal sin IVA:  USD ${m2(T.sale)}
+${LC.porAlicuota.map(a=>('IVA '+alicTxt(a.alic)+':').padEnd(19)+'USD '+m2(a.monto)).join('\n')}
+TOTAL ESTIMADO:    USD ${m2(tot)}
 Equivalente ARS:   ARS ${Math.round(tot*S.tc).toLocaleString('es-AR')}
 Tipo de cambio:    1 USD = ARS ${S.tc.toLocaleString('es-AR')}
-Precio es orientativo sujeto a disponibilidad de stock.${(()=>{
+Precios unitarios sin IVA. Orientativos, sujetos a disponibilidad de stock.${(()=>{
   const roi=calcROI(R,T);
   if(!roi||!roi.aplica)return '';
   return `
@@ -2802,7 +2854,7 @@ ${tip('¿Cómo presentar una propuesta profesional?',
   1. Nombre del cliente y fecha en el encabezado.<br>
   2. Consumo en kWh/mes (lenguaje del cliente, no Wh/día).<br>
   3. Sistema con especificación técnica y autonomía.<br>
-  4. Precio claro con condiciones (markup, IVA, flete).<br>
+  4. Precio claro por &iacute;tem, con IVA discriminado y condiciones (flete, stock).<br>
   5. Observaciones técnicas que demuestren expertise.`)}
 <div class="card">
   <div class="card-title" style="justify-content:space-between">
@@ -2814,16 +2866,23 @@ ${tip('¿Cómo presentar una propuesta profesional?',
     </div>
   </div>
   ${S.proposalEdited?'<div class="section-note" style="margin-bottom:6px">&#9998; Texto editado a mano: ya no se actualiza solo con los cambios de dise&ntilde;o.</div>':''}
+  ${propuestaConCostos()?'<div class="alert-warn" style="margin-bottom:8px">&#9888; Este texto se edit&oacute; con una versi&oacute;n anterior y <b>muestra tus costos y tu markup</b>. Regeneralo antes de entregarlo al cliente.</div>':''}
   <div class="proposal-preview" id="proposal-text">${escHtml(shown)}</div>
 </div>`;
 }
-function copyProposal(){
-  navigator.clipboard.writeText(S.proposal).then(()=>alert('Propuesta copiada al portapapeles.')).catch(()=>{
-    const ta=document.createElement('textarea');ta.value=S.proposal;
+// Las versiones anteriores ponían el costo y el markup en la propuesta. Un
+// texto editado a mano con esa versión quedó guardado así en el navegador.
+function propuestaConCostos(){
+  return !!(S.proposalEdited&&S.proposal&&/Materiales \(neto\)|Markup +\d/.test(S.proposal));
+}
+function copiarTexto(txt,msg){
+  navigator.clipboard.writeText(txt).then(()=>alert(msg)).catch(()=>{
+    const ta=document.createElement('textarea');ta.value=txt;
     document.body.appendChild(ta);ta.select();document.execCommand('copy');
-    document.body.removeChild(ta);alert('Copiado!');
+    document.body.removeChild(ta);alert(msg);
   });
 }
+function copyProposal(){copiarTexto(S.proposal,'Propuesta copiada al portapapeles.');}
 function editProposal(){
   const el=$('proposal-text');if(!el)return;
   el.contentEditable='true';el.style.border='1px solid var(--g2)';
@@ -2843,11 +2902,12 @@ function regenProposal(){
 
 // ── STEP 9: Exportar ───────────────────────────────────────────────────────
 function s9(){
+  const PE=pedidoEcoapo();
   return `
 <div class="step-hdr">
   <div class="step-eyebrow">Paso 9 &mdash; Exportar</div>
-  <div class="step-title">&#127942; Descarg&aacute; tu propuesta</div>
-  <div class="step-sub">Generá el PDF profesional para entregar al cliente.</div>
+  <div class="step-title">&#127942; Presupuesto y pedido</div>
+  <div class="step-sub">Dos documentos distintos: el presupuesto para tu cliente y el pedido de materiales a EcoApo.</div>
 </div>
 <div class="card" style="text-align:center;padding:28px">
   <div style="font-size:48px;margin-bottom:12px">&#128203;</div>
@@ -2859,9 +2919,28 @@ function s9(){
     ${S.results.nPan} paneles ${S.results.panWp} Wp &bull; Inversor ${fa(S.results.invSz)} W`:''}
   </div>
   <button class="btn btn-dk btn-full" style="max-width:320px;margin:0 auto;font-size:14px;padding:12px" onclick="exportPDF()">
-    &#8659; Descargar PDF profesional
+    &#8659; Descargar presupuesto para el cliente
   </button>
-  <div style="margin-top:10px;font-size:12px;color:var(--ts)">Incluye datos del cliente, sistema, cotizaci\u00f3n y propuesta.</div>
+  <div style="margin-top:10px;font-size:12px;color:var(--ts)">Precios de venta con tu markup incluido e IVA discriminado.
+  No muestra tus costos ni tu markup.</div>
+</div>
+<div class="card">
+  <div class="card-title">&#128230; Pedido a EcoApo</div>
+  <div class="section-note" style="margin-bottom:10px">A precio de lista, sin la mano de obra y sin datos de tu cliente.</div>
+  ${PE.lineas.length?`
+  <div class="res-grid">
+    <div class="rc2"><div class="rc2-lbl">Productos</div>
+      <div class="rc2-val">${PE.lineas.length}</div>
+      <div class="rc2-unit">${PE.lineas.reduce((t,l)=>t+l.qty,0)} unidades</div></div>
+    <div class="rc2 hi"><div class="rc2-lbl">Total del pedido</div>
+      <div class="rc2-val" style="font-size:18px">USD ${m2(PE.total)}</div>
+      <div class="rc2-unit">IVA incluido</div></div>
+  </div>
+  ${PE.faltan?`<div class="alert-warn" style="margin-top:10px">&#9888; ${PE.faltan} &iacute;tem${PE.faltan>1?'s':''} sin precio de lista: va${PE.faltan>1?'n':''} al pedido como &laquo;a cotizar&raquo;.</div>`:''}
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+    <button class="btn btn-dk" onclick="exportPedido()">&#8659; Descargar pedido (PDF)</button>
+    <button class="btn btn-ghost" onclick="copyPedido()">&#128203; Copiar pedido</button>
+  </div>`:'<div class="alert-warn">Complet&aacute; el dise&ntilde;o y la cotizaci&oacute;n del Paso 7 para armar el pedido.</div>'}
 </div>
 <div class="card">
   <div class="card-title">Resumen del proyecto</div>
@@ -2885,25 +2964,42 @@ function s9(){
 }
 
 // ── PDF EXPORT ─────────────────────────────────────────────────────────────
-function exportPDF(){
-  if(!window.jspdf){alert('Librer\u00eda PDF cargando\u2026 intent\u00e1 en unos segundos.');return;}
-  const{jsPDF}=window.jspdf;
-  const doc=new jsPDF({format:'a4',unit:'mm'});
-  const PW=210,PH=297,ML=14,MR=14,CW=PW-ML-MR;
-  const G1=[26,66,32],G2=[140,198,63],G3=[238,247,228],GR=[80,80,80];
-  let y=0;
+const PDF_C={G1:[26,66,32],G2:[140,198,63],G3:[238,247,228],GR:[80,80,80]};
+function pdfCabecera(doc,titulo){
+  const{G1,G2}=PDF_C,PW=210,ML=14;
   const now=new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
-  const R=S.results;
-  // Header
   doc.setFillColor(...G1);doc.rect(0,0,PW,26,'F');
   doc.setFillColor(...G2);doc.rect(ML,8,18,7,'F');
   doc.setFont('helvetica','bold');doc.setFontSize(7);doc.setTextColor(...G1);
   doc.text('ECOAPO',ML+1.5,13);
   doc.setTextColor(255,255,255);doc.setFontSize(14);
-  doc.text('Propuesta Solar Fotovoltaica',ML+22,12);
+  doc.text(titulo,ML+22,12);
   doc.setFont('helvetica','normal');doc.setFontSize(8);
   doc.text('ECOAPO \u00b7 Simulador Solar Fotovoltaico \u00b7 '+now,ML+22,18);
-  y=32;
+  return 32;
+}
+function pdfPie(doc,leyenda){
+  const{G1,G2}=PDF_C,PW=210,PH=297,ML=14,MR=14;
+  const tp=doc.internal.getNumberOfPages();
+  for(let i=1;i<=tp;i++){
+    doc.setPage(i);doc.setFillColor(...G1);doc.rect(0,PH-13,PW,13,'F');
+    doc.setFontSize(7);doc.setFont('helvetica','normal');
+    doc.setTextColor(...G2);doc.text('ECOAPO \u00b7 Simulador Solar Fotovoltaico',ML,PH-6);
+    doc.setTextColor(255,255,255);
+    doc.text(leyenda,ML+80,PH-6);
+    doc.text(i+'/'+tp,PW-MR,PH-6,{align:'right'});
+  }
+}
+function exportPDF(){
+  if(!window.jspdf){alert('Librer\u00eda PDF cargando\u2026 intent\u00e1 en unos segundos.');return;}
+  if(propuestaConCostos()&&!confirm('La propuesta editada a mano muestra tus costos y tu markup.\n\n'+
+    'Regenerala en el Paso 8 antes de entregarla. \u00bfDescargar igual?'))return;
+  const{jsPDF}=window.jspdf;
+  const doc=new jsPDF({format:'a4',unit:'mm'});
+  const PW=210,PH=297,ML=14,MR=14,CW=PW-ML-MR;
+  const{G1,G2,G3,GR}=PDF_C;
+  const R=S.results;
+  let y=pdfCabecera(doc,'Propuesta Solar Fotovoltaica');
   // Client block
   doc.setFillColor(...G3);doc.rect(ML,y,CW,18,'F');
   doc.setDrawColor(...G2);doc.setLineWidth(0.4);doc.rect(ML,y,CW,18);
@@ -2961,36 +3057,41 @@ function exportPDF(){
   // Quotation
   const qItems=S.quoteItems.filter(i=>parseFloat(i.price)>0);
   if(qItems.length){
-    if(y>220)doc.addPage();
+    // La cotización no se parte: si no entra entera (título, filas, totales y
+    // nota), pasa completa a la página siguiente. Antes se agregaba la página
+    // sin volver arriba, y el TOTAL podía quedar solo en otra hoja.
+    const alic=new Set(qItems.map(i=>parseFloat(i.iva)||0).filter(a=>a>0)).size;
+    const altoCot=5+(qItems.length+3+alic)*8.4+12;
+    if(y+altoCot>PH-18){doc.addPage();y=20;}
     doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(...G1);
     doc.text('Cotizaci\u00f3n estimada',ML,y);y+=5;
     const T=quoteTotals();   // mismo cálculo que el Paso 7 y el Paso 8
-    const qRows=qItems.map(i=>{
-      const p=parseFloat(i.price),t=p*i.qty;
-      return[i.comp,i.qty,'USD '+p.toFixed(2),'USD '+fa(Math.round(t)),'ARS '+fa(Math.round(t*S.tc))];
-    });
-    const sub=(lbl,usd)=>qRows.push([{content:lbl,styles:{fontStyle:'bold'}},'',' ',
-      {content:'USD '+fa(Math.round(usd)),styles:{fontStyle:'bold'}},'']);
-    sub('Subtotal materiales (neto)',T.net);
-    if(S.markup>0)sub('+ Markup distribuidor '+S.markup+'%',T.markupAmt);
-    sub('Precio de venta (sin IVA)',T.sale);
-    if(T.ivaAmt>0)sub('+ IVA',T.ivaAmt);
-    qRows.push([{content:'TOTAL',styles:{fontStyle:'bold',textColor:G1}},'',' ',
-      {content:'USD '+fa(Math.round(T.grand)),styles:{fontStyle:'bold',textColor:G1}},
-      {content:'ARS '+fa(Math.round(T.grand*S.tc)),styles:{textColor:GR}}]);
+    // Precios de VENTA: el markup va dentro de cada precio unitario. Este PDF
+    // es para el cliente del instalador: nunca muestra costo ni markup.
+    const LC=lineasCliente();
+    const qRows=LC.lineas.map(l=>[l.comp,l.qty,'USD '+m2(l.unit),alicTxt(l.iva),'USD '+m2(l.sub)]);
+    const sub=(lbl,usd,b)=>qRows.push([
+      {content:lbl,colSpan:4,styles:{halign:'right',fontStyle:b?'bold':'normal'}},
+      {content:'USD '+m2(usd),styles:{fontStyle:b?'bold':'normal'}}]);
+    sub('Subtotal sin IVA',T.sale,true);
+    LC.porAlicuota.forEach(a=>sub('IVA '+alicTxt(a.alic),a.monto));
+    qRows.push([{content:'TOTAL',colSpan:4,styles:{halign:'right',fontStyle:'bold',textColor:G1}},
+      {content:'USD '+m2(T.grand),styles:{fontStyle:'bold',textColor:G1}}]);
     doc.autoTable({startY:y,
-      head:[['Componente','Cant.','P.Unit.USD','Neto USD','Neto ARS']],
+      head:[['Componente','Cant.','P. unit. USD','IVA','Subtotal USD']],
       body:qRows,margin:{left:ML,right:MR},
       styles:{fontSize:8,cellPadding:2.5},
       headStyles:{fillColor:G1,textColor:255,fontStyle:'bold',fontSize:7.5},
       alternateRowStyles:{fillColor:[248,252,246]},
-      columnStyles:{0:{cellWidth:65},1:{halign:'center',cellWidth:12},
-        2:{halign:'right',cellWidth:28},3:{halign:'right',cellWidth:28},4:{halign:'right'}},
+      columnStyles:{0:{cellWidth:78},1:{halign:'center',cellWidth:14},
+        2:{halign:'right',cellWidth:30},3:{halign:'center',cellWidth:16},4:{halign:'right'}},
       theme:'grid'});
     y=doc.lastAutoTable.finalY+5;
     doc.setFontSize(7.5);doc.setFont('helvetica','italic');doc.setTextColor(...GR);
-    doc.text('TC referencial: 1 USD = ARS '+S.tc.toLocaleString('es-AR')+
-      ' \u00b7 Precios sin flete ni transporte salvo indicaci\u00f3n contraria',ML,y);
+    const nota=doc.splitTextToSize('Equivalente: ARS '+fa(T.grand*S.tc)+
+      ' \u00b7 TC referencial 1 USD = ARS '+S.tc.toLocaleString('es-AR')+
+      ' \u00b7 Precios unitarios sin IVA \u00b7 Sin flete ni transporte salvo indicaci\u00f3n contraria',CW);
+    doc.text(nota,ML,y);y+=nota.length*3.4;
   }
   // Criterios ajustados por el técnico: quedan asentados en el documento.
   const modP=paramsModificados();
@@ -3023,18 +3124,81 @@ function exportPDF(){
       doc.text(ln,ML,py);py+=3.6;
     });
   }
-  // Footer
-  const tp=doc.internal.getNumberOfPages();
-  for(let i=1;i<=tp;i++){
-    doc.setPage(i);doc.setFillColor(...G1);doc.rect(0,PH-13,PW,13,'F');
-    doc.setFontSize(7);doc.setFont('helvetica','normal');
-    doc.setTextColor(...G2);doc.text('ECOAPO \u00b7 Simulador Solar Fotovoltaico',ML,PH-6);
-    doc.setTextColor(255,255,255);
-    doc.text('Pre-dimensionado orientativo \u00b7 Validar con proyecto ejecutivo',ML+80,PH-6);
-    doc.text(i+'/'+tp,PW-MR,PH-6,{align:'right'});
-  }
+  pdfPie(doc,'Pre-dimensionado orientativo \u00b7 Validar con proyecto ejecutivo');
   const fn='propuesta_solar_'+(S.project.name.replace(/\s+/g,'_')||'ecoapo')+'_'+new Date().toISOString().slice(0,10)+'.pdf';
   doc.save(fn);
+}
+
+// ── PEDIDO A ECOAPO ────────────────────────────────────────────────────────
+// Lo que el instalador le compra a EcoApo para este proyecto, a precio de
+// lista. No lleva la mano de obra, ni el markup, ni datos del cliente final:
+// el pedido es entre el instalador y EcoApo. Sí lleva el resumen técnico,
+// para que EcoApo pueda verificar la compatibilidad de lo que se pide.
+function resumenSistema(R){
+  if(!R)return'\u2014';
+  const sys={offgrid:'Off Grid',ongrid:'On Grid',hybrid:'H\u00edbrido'}[R.sysType];
+  return sys+' \u00b7 '+(R.totWpInst/1000).toFixed(2).replace('.',',')+' kWp \u00b7 inversor '+fa(R.invSz)+' W'+
+    (R.nBat>0?' \u00b7 banco '+R.bankKwh.toFixed(1).replace('.',',')+' kWh a '+R.volt+' V':'');
+}
+function textoPedido(){
+  const PE=pedidoEcoapo();
+  const now=new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
+  const lin=PE.lineas.map(l=>l.qty+' \u00d7 '+l.comp+
+    (l.prod?'\n    Lista: '+l.prod:'')+
+    '\n    '+(l.unit>0?'USD '+m2(l.unit)+' c/u \u00b7 IVA '+alicTxt(l.iva)+' \u00b7 USD '+m2(l.sub):'a cotizar')).join('\n');
+  return 'PEDIDO DE MATERIALES \u2014 ECOAPO\n'+
+    'Fecha:    '+now+'\n'+
+    'Sistema:  '+resumenSistema(S.results)+'\n\n'+
+    lin+'\n\n'+
+    'Neto:          USD '+m2(PE.net)+'\n'+
+    PE.porAlicuota.map(a=>('IVA '+alicTxt(a.alic)+':').padEnd(15)+'USD '+m2(a.monto)+'\n').join('')+
+    'TOTAL:         USD '+m2(PE.total)+'\n'+
+    (PE.faltan?PE.faltan+' \u00edtem'+(PE.faltan>1?'s':'')+' sin precio: a cotizar por EcoApo.\n':'')+
+    'Precios de lista, sujetos a confirmaci\u00f3n. No incluye mano de obra.';
+}
+function copyPedido(){copiarTexto(textoPedido(),'Pedido copiado: pegalo en WhatsApp o en un mail a EcoApo.');}
+function exportPedido(){
+  if(!window.jspdf){alert('Librer\u00eda PDF cargando\u2026 intent\u00e1 en unos segundos.');return;}
+  const PE=pedidoEcoapo();
+  if(!PE.lineas.length){alert('No hay productos para pedir: complet\u00e1 el dise\u00f1o y la cotizaci\u00f3n.');return;}
+  const{jsPDF}=window.jspdf;
+  const doc=new jsPDF({format:'a4',unit:'mm'});
+  const ML=14,MR=14,CW=210-ML-MR;
+  const{G1,GR}=PDF_C;
+  let y=pdfCabecera(doc,'Pedido de materiales');
+  doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(...GR);
+  doc.text('Sistema: '+resumenSistema(S.results),ML,y);y+=6;
+  const rows=PE.lineas.map(l=>[
+    l.comp+(l.prod?'\nLista: '+l.prod:''),
+    l.qty,
+    l.unit>0?'USD '+m2(l.unit):'a cotizar',
+    alicTxt(l.iva),
+    l.unit>0?'USD '+m2(l.sub):'\u2014']);
+  const sub=(lbl,usd,b)=>rows.push([
+    {content:lbl,colSpan:4,styles:{halign:'right',fontStyle:b?'bold':'normal'}},
+    {content:'USD '+m2(usd),styles:{fontStyle:b?'bold':'normal'}}]);
+  sub('Neto',PE.net,true);
+  PE.porAlicuota.forEach(a=>sub('IVA '+alicTxt(a.alic),a.monto));
+  rows.push([{content:'TOTAL',colSpan:4,styles:{halign:'right',fontStyle:'bold',textColor:G1}},
+    {content:'USD '+m2(PE.total),styles:{fontStyle:'bold',textColor:G1}}]);
+  doc.autoTable({startY:y,
+    head:[['Producto','Cant.','P. lista USD','IVA','Subtotal USD']],
+    body:rows,margin:{left:ML,right:MR},
+    styles:{fontSize:8,cellPadding:2.5},
+    headStyles:{fillColor:G1,textColor:255,fontStyle:'bold',fontSize:7.5},
+    alternateRowStyles:{fillColor:[248,252,246]},
+    columnStyles:{0:{cellWidth:78},1:{halign:'center',cellWidth:14},
+      2:{halign:'right',cellWidth:30},3:{halign:'center',cellWidth:16},4:{halign:'right'}},
+    theme:'grid'});
+  y=doc.lastAutoTable.finalY+5;
+  doc.setFontSize(7.5);doc.setFont('helvetica','italic');doc.setTextColor(...GR);
+  const notas=[];
+  if(PE.faltan)notas.push(PE.faltan+' \u00edtem'+(PE.faltan>1?'s':'')+' sin precio: a cotizar por EcoApo');
+  notas.push('Precios de lista cargados en el simulador, sujetos a confirmaci\u00f3n','No incluye mano de obra',
+    'Equivalente ARS '+fa(PE.total*S.tc)+' (TC 1 USD = ARS '+S.tc.toLocaleString('es-AR')+')');
+  doc.text(doc.splitTextToSize(notas.join(' \u00b7 '),CW),ML,y);
+  pdfPie(doc,'Pedido de materiales \u00b7 Precios de lista sujetos a confirmaci\u00f3n');
+  doc.save('pedido_ecoapo_'+new Date().toISOString().slice(0,10)+'.pdf');
 }
 
 // ── PANEL DE CRITERIOS ─────────────────────────────────────────────────────

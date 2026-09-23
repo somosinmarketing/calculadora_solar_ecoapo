@@ -82,9 +82,16 @@ const {chromium}=cargarPlaywright();
   // BUG 3: el Paso 8 debe coincidir con el Paso 7
   await pg.click('#btn-next');
   const prop=await pg.textContent('#proposal-text');
-  const m=prop.match(/TOTAL ESTIMADO:\s+USD ([\d.]+)/);
-  const totProp=m?parseFloat(m[1].replace(/\./g,'')):-1;
+  const m=prop.match(/TOTAL ESTIMADO:\s+USD ([\d.,]+)/);
+  const totProp=m?parseFloat(m[1].replace(/\./g,'').replace(',','.')):-1;
   chk('BUG 3: el total del Paso 8 coincide con el del Paso 7', Math.abs(totProp-gr)<=1, 'Paso 7='+gr+'  Paso 8='+totProp);
+  // La propuesta es para el cliente del instalador: precios de venta, nunca costos.
+  chk('la propuesta no muestra el costo ni el markup',
+      !/Materiales \(neto\)|Markup/.test(prop), (prop.match(/Markup.*|Materiales.*/)||['(no aparecen)'])[0]);
+  const unitVenta=await pg.evaluate(()=>lineasCliente().lineas[0].unit);
+  chk('la propuesta muestra el precio unitario de venta',
+      prop.includes('USD '+unitVenta.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})+' c/u'),
+      'venta c/u = '+unitVenta);
   chk('el & del nombre no rompe la propuesta', prop.includes('García & Hijos'),
       (prop.match(/Cliente:.*/)||[''])[0]);
 
@@ -122,6 +129,33 @@ const {chromium}=cargarPlaywright();
   chk('BUG 7: la propuesta agrega su propia página', conProp.paginas>sinProp,
       'con propuesta='+conProp.paginas+'  sin propuesta='+sinProp);
   chk('el PDF conserva la cotización', /Cotizaci/.test(crudo)&&/TOTAL/.test(crudo));
+  chk('el PDF del cliente no muestra costo ni markup',
+      !/Markup|materiales \(neto\)|Neto USD/.test(crudo));
+  chk('el PDF del cliente discrimina el IVA por alícuota', /IVA 10,5%/.test(crudo)&&/IVA 21%/.test(crudo));
+
+  // Pedido a EcoApo: precio de lista, sin mano de obra ni datos del cliente.
+  const pedido=await pg.evaluate(()=>{
+    const orig=window.jspdf.jsPDF; let cap=null;
+    window.jspdf.jsPDF=function(...a){
+      const d=new orig(...a);
+      d.save=(fn)=>{cap={fn,b64:d.output('datauristring')};};
+      return d;
+    };
+    try{exportPedido();}finally{window.jspdf.jsPDF=orig;}
+    return{cap,txt:textoPedido(),pe:pedidoEcoapo()};
+  });
+  const crudoPed=Buffer.from(pedido.cap.b64.split(',')[1],'base64').toString('latin1');
+  chk('el pedido genera su propio PDF', /Pedido de materiales/.test(crudoPed), pedido.cap.fn);
+  chk('el pedido no incluye la mano de obra',
+      !/Mano de obra/.test(crudoPed)&&!/Mano de obra/.test(pedido.txt));
+  chk('el pedido no lleva datos del cliente final',
+      !/Garc/.test(crudoPed)&&!/Garc/.test(pedido.txt)&&!/Garc/.test(pedido.cap.fn));
+  const costoPanel=await pg.evaluate(()=>parseFloat(S.quoteItems.find(i=>i.type==='panel').price));
+  chk('el pedido va a precio de lista',
+      pedido.txt.includes('USD '+costoPanel.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})+' c/u'),
+      'lista panel = '+costoPanel);
+  const tarjeta=await pg.textContent('#main');
+  chk('el Paso 9 ofrece el pedido a EcoApo', /Pedido a EcoApo/.test(tarjeta)&&/Descargar pedido/.test(tarjeta));
 
   // Persistencia
   await pg.reload();
