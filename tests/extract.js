@@ -24,6 +24,6 @@ module.exports=function cargarMotor(){
     +corte(src,'// ── QUOTE: QUÉ VE CADA DESTINATARIO','// ── QUOTE: SINCRONIZACIÓN');
   const ctx={module:{},console};
   vm.createContext(ctx);
-  vm.runInContext(code+'\n;this.calc=calc;this.quoteTotals=quoteTotals;this.calcROI=calcROI;this.paramsModificados=paramsModificados;this.ivaDeTipo=ivaDeTipo;this.lineasCliente=lineasCliente;this.pedidoEcoapo=pedidoEcoapo;this.PARAMS_DEF=PARAMS_DEF;this.S=S;',ctx);
+  vm.runInContext(code+'\n;this.calc=calc;this.quoteTotals=quoteTotals;this.calcROI=calcROI;this.paramsModificados=paramsModificados;this.ivaDeTipo=ivaDeTipo;this.lineasCliente=lineasCliente;this.pedidoEcoapo=pedidoEcoapo;this.itemsSinPrecio=itemsSinPrecio;this.PARAMS_DEF=PARAMS_DEF;this.S=S;',ctx);
   return ctx;
 };

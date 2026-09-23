@@ -1,6 +1,6 @@
 // Tests del motor de dimensionado y del cálculo de totales.
 //   node tests/unit.js
-const {calc,quoteTotals,calcROI,paramsModificados,ivaDeTipo,lineasCliente,pedidoEcoapo,PARAMS_DEF,S}=require('./extract.js')();
+const {calc,quoteTotals,calcROI,paramsModificados,ivaDeTipo,lineasCliente,pedidoEcoapo,itemsSinPrecio,PARAMS_DEF,S}=require('./extract.js')();
 
 let fail=0;
 const f1v=n=>Math.round(n*10)/10;
@@ -9,7 +9,7 @@ const base=()=>Object.assign(S,{consumoMode:'equipos',items:[],facturaKwh:0,fact
   profile:'equilibrado',hsp:4.5,panWp:500,autonomy:24,autonomyCustom:0,
   batId:'lfe100-48',sysType:'offgrid',voltOv:'auto',markup:20,iva:0,quoteItems:[],
   inyecta:null,respaldo:'auto',hspMin:2.6,hspCriterio:'auto',coberturaObj:100,
-  tc:1400,params:JSON.parse(JSON.stringify(PARAMS_DEF))});
+  tc:1400,preciosVistos:{},params:JSON.parse(JSON.stringify(PARAMS_DEF))});
 
 console.log('\n=== Totales de la cotización ===');
 // El markup va sobre el costo neto y el IVA sobre el precio de venta.
@@ -392,6 +392,55 @@ chk('si el diseño no cambia, conserva el producto de lista', !!S.quoteItems[0].
 S.panWp=450; R=calc(); ctxQ.sync(R);
 chk('si cambia el panel, suelta el producto de lista', !S.quoteItems[0]._autoMatched,
     S.quoteItems[0].comp);
+
+console.log('\n=== Cambio de equipo en el diseño: el precio anterior no sobrevive ===');
+// Si el diseño pasa de un inversor a otro, el precio cargado era del anterior.
+base(); S.sysType='offgrid'; S.batId='lfe200-48'; S.items=casa(); R=calc();
+S.quoteItems=[]; ctxQ.sync(R);
+const precio=(t,v)=>{const it=S.quoteItems.find(i=>i.type===t);it.price=v;return it;};
+precio('inv','650'); precio('panel','180'); precio('estr','45');
+const invAntes=S.quoteItems.find(i=>i.type==='inv').comp;
+const nPanAntes=S.quoteItems.find(i=>i.type==='panel').qty;
+S.items=[{id:1,device:'Casa',w:1000,qty:1,hd:8,pk:1},{id:2,device:'Bomba',w:1500,qty:1,hd:2,pk:3}];
+R=calc(); ctxQ.sync(R);
+let inv=S.quoteItems.find(i=>i.type==='inv');
+chk('el diseño efectivamente cambió de inversor', inv.comp!==invAntes, invAntes+' -> '+inv.comp);
+chk('el precio del inversor anterior se borra', inv.price==='', 'precio="'+inv.price+'"');
+chk('y queda registrado qué equipo era', inv._reset===invAntes, 'antes: '+inv._reset);
+const pan=S.quoteItems.find(i=>i.type==='panel');
+chk('si sólo cambia la cantidad, el precio se conserva',
+    pan.price==='180'&&(pan.qty!==nPanAntes||pan.comp.includes(R.panWp)),
+    pan.qty+' × '+pan.comp+' a USD '+pan.price+' (antes '+nPanAntes+')');
+chk('la estructura conserva su precio unitario', S.quoteItems.find(i=>i.type==='estr').price==='45');
+chk('el inversor sin precio aparece como pendiente', itemsSinPrecio().includes(inv.comp),
+    itemsSinPrecio().join(', '));
+
+// Ida y vuelta: al volver al inversor anterior recupera su precio, pero el
+// equipo intermedio nunca hereda un precio ajeno.
+S.items=casa(); R=calc(); ctxQ.sync(R); inv=S.quoteItems.find(i=>i.type==='inv');
+chk('al volver al equipo anterior recupera su precio', inv.comp===invAntes&&inv.price==='650'&&!inv._reset,
+    inv.comp+' a USD '+inv.price);
+S.items=[{id:1,device:'Casa',w:1000,qty:1,hd:8,pk:1},{id:2,device:'Bomba',w:1500,qty:1,hd:2,pk:3}];
+R=calc(); ctxQ.sync(R); inv=S.quoteItems.find(i=>i.type==='inv');
+chk('y el otro equipo sigue sin precio heredado', inv.price==='', inv.comp+', precio="'+inv.price+'"');
+S.items=casa(); R=calc(); ctxQ.sync(R);
+
+// Nombre editado a mano: si el equipo es el mismo, se respeta; si cambió, no.
+precio('inv','900'); inv=S.quoteItems.find(i=>i.type==='inv');
+inv.comp='Inversor Growatt'; inv._edited=true;
+ctxQ.sync(R); inv=S.quoteItems.find(i=>i.type==='inv');
+chk('mismo equipo con nombre editado: conserva nombre y precio', inv.comp==='Inversor Growatt'&&inv.price==='900');
+S.items=[{id:1,device:'Casa',w:1000,qty:1,hd:8,pk:1},{id:2,device:'Bomba',w:1500,qty:1,hd:2,pk:3}];
+R=calc(); ctxQ.sync(R); inv=S.quoteItems.find(i=>i.type==='inv');
+chk('equipo distinto con nombre editado: se regenera', inv.comp!=='Inversor Growatt'&&inv.price==='',
+    inv.comp+', precio="'+inv.price+'"');
+
+// Ítems guardados por la versión anterior (sin _diseno) no deben perder el precio.
+base(); S.items=casa(); R=calc(); S.quoteItems=[]; ctxQ.sync(R);
+S.quoteItems.forEach(i=>{delete i._diseno;i.price='100';});
+ctxQ.sync(R);
+chk('un proyecto guardado antes de este cambio conserva sus precios',
+    S.quoteItems.every(i=>i.price==='100'));
 
 console.log(fail===0?'\n===== TESTS UNITARIOS OK =====':'\n===== '+fail+' FALLAS =====');
 process.exit(fail?1:0);

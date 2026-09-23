@@ -86,8 +86,23 @@ sólo lo que le corresponde a su destinatario:
 | Pedido a EcoApo (Paso 9) | EcoApo | Precio de lista, **sin la mano de obra** y **sin datos del cliente final**. Lleva el resumen técnico del sistema y, si hubo coincidencia con la lista cargada, el producto y su código |
 
 El pedido se descarga en PDF o se copia como texto para mandarlo por WhatsApp
-o mail. Si el diseño cambia un componente, el producto de lista que tenía
-asociado se descarta, para que el pedido no salga con el código de otro equipo.
+o mail.
+
+**Datos del instalador.** Se cargan en el Paso 1 (nombre o empresa, matrícula,
+teléfono, email). Firman el presupuesto del cliente —bloque «Presupuestado
+por» en el PDF y en la propuesta— y encabezan el pedido a EcoApo. Se guardan
+en el navegador con su propia clave (`ecoapo-instalador-v1`), así que «Nuevo
+proyecto» no los borra.
+
+**Cambio de equipo en el diseño.** Si el diseño cambia un componente (otro
+inversor, otra batería, otro panel), el precio, el producto de lista y el
+nombre de ese ítem se descartan: eran del equipo anterior. El Paso 7 marca el
+ítem para volver a cargarle el precio. Si sólo cambia la cantidad, el precio
+se conserva. Cada equipo recuerda su último precio (`S.preciosVistos`): si el
+diseño vuelve a él, lo recupera.
+
+Antes de descargar el presupuesto, el simulador avisa si faltan los datos del
+instalador o si hay ítems sin precio, que quedarían fuera del total.
 
 ### Criterios de cálculo
 

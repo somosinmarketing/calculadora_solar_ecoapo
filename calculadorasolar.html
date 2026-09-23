@@ -1172,6 +1172,10 @@ const f2=n=>parseFloat(n.toFixed(2));
 
 let S={
   project:{name:'',location:'',type:'Vivienda'},
+  // Quién presupuesta. Es del instalador, no del proyecto: se guarda aparte y
+  // sobrevive a «Nuevo proyecto» (ver LS_INST).
+  instalador:{nombre:'',matricula:'',tel:'',email:''},
+  preciosVistos:{},  // último precio cargado por equipo (ver syncQuoteWithDesign)
   consumoMode:'equipos',   // 'equipos' | 'factura'
   facturaKwh:0,            // kWh/mes desde factura
   facturaW:0,              // potencia simultánea estimada (0 = automática)
@@ -1298,6 +1302,27 @@ ${tip('&#128161; ¿Para qué sirven estos datos?',
     <select id="p-type">
       ${['Vivienda','Comercio','Industria','Escuela','Bombeo','Otro'].map(t=>`<option${t===S.project.type?' selected':''}>${t}</option>`).join('')}
     </select>
+  </div>
+</div>
+<div class="card">
+  <div class="card-title">&#128119; Tus datos como instalador</div>
+  <div class="section-note" style="margin-bottom:10px">Aparecen en el presupuesto para tu cliente y en el pedido a EcoApo.
+  Se guardan en este navegador y no se borran al empezar un proyecto nuevo.</div>
+  <div class="row2">
+    <div class="fld"><label>Nombre o empresa</label>
+      <input id="i-nombre" placeholder="Ej: Solar Cuyo Instalaciones" value="${esc(S.instalador.nombre)}"
+        autocomplete="organization" oninput="instChange('nombre',this.value)"></div>
+    <div class="fld"><label>Matr&iacute;cula <span style="font-weight:400;color:var(--ts)">(opcional)</span></label>
+      <input id="i-mat" placeholder="Ej: MP 1234" value="${esc(S.instalador.matricula)}"
+        oninput="instChange('matricula',this.value)"></div>
+  </div>
+  <div class="row2">
+    <div class="fld"><label>Tel&eacute;fono / WhatsApp</label>
+      <input id="i-tel" type="tel" inputmode="tel" placeholder="Ej: 261 555-1234" value="${esc(S.instalador.tel)}"
+        autocomplete="tel" oninput="instChange('tel',this.value)"></div>
+    <div class="fld"><label>Email</label>
+      <input id="i-email" type="email" inputmode="email" placeholder="Ej: ventas@solarcuyo.com" value="${esc(S.instalador.email)}"
+        autocomplete="email" oninput="instChange('email',this.value)"></div>
   </div>
 </div>`;
 }
@@ -2165,9 +2190,11 @@ function s7(){
     const p=parseFloat(it.price)||0,ok=p>0;
     const tot=ok?p*it.qty:0;   // neto de la fila; markup e IVA van en el pie
     const matched=it._autoMatched?` title="Auto: ${esc(it._autoMatched)}" style="border-bottom:1px dashed var(--g2)"`:' ';
+    const reset=it._reset&&!ok?`<div class="section-note" id="rs-${it.id}" style="color:#9a5b00;margin-top:4px">&#9888; El dise&ntilde;o cambi&oacute; de equipo
+      (antes: ${esc(it._reset)}). Carg&aacute; el precio del nuevo.</div>`:'';
     return`<tr>
 <td><input class="nm" type="text" value="${esc(it.comp)}"
-  data-qid="${it.id}" oninput="qComp(this)" style="font-weight:600;width:100%;min-width:90px"${matched}></td>
+  data-qid="${it.id}" oninput="qComp(this)" style="font-weight:600;width:100%;min-width:90px"${matched}>${reset}</td>
 <td style="text-align:center"><input type="number" value="${it.qty}" min="1"
   data-qid="${it.id}" oninput="qQty(this)" style="width:54px;text-align:center"></td>
 <td class="r"><input type="number" placeholder="USD" value="${it.price}"
@@ -2388,6 +2415,11 @@ function quoteTotals(){
 //     vende) y sin datos del cliente final.
 // Las líneas de venta suman T.sale y el IVA por alícuota suma T.ivaAmt: es la
 // misma cuenta que quoteTotals(), sólo que abierta por fila.
+// Un ítem sin precio no aparece en el presupuesto al cliente: el total sale
+// sin él. Pasa, por ejemplo, cuando el diseño cambia de inversor.
+function itemsSinPrecio(){
+  return S.quoteItems.filter(it=>(parseInt(it.qty)||0)>0&&!(parseFloat(it.price)>0)).map(it=>it.comp);
+}
 const m2=n=>(Number(n)||0).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2});
 const alicTxt=a=>String(a).replace('.',',')+'%';
 function agruparIva(porAlic){
@@ -2448,16 +2480,35 @@ function syncQuoteWithDesign(R){
   want.push({type:'mdo', comp:'Mano de obra e instalaci\u00f3n',qty:1});
 
   const autoTypes=new Set(want.map(w=>w.type));
+  // Último precio cargado para cada equipo. Si el diseño va y vuelve (probar
+  // On Grid y volver a Off Grid), el equipo recupera su precio en vez de
+  // perderlo. Un precio nunca pasa de un equipo a otro.
+  const vistos=S.preciosVistos||(S.preciosVistos={});
+  const guardar=it=>{if(parseFloat(it.price)>0)
+    vistos[it.type+'|'+(it._diseno||it.comp)]={price:it.price,iva:it.iva,m:it._autoMatched};};
+  const conPrecio=(it,v)=>v?{...it,price:v.price,iva:v.iva,_autoMatched:v.m}:it;
+  // Baterías y regulador desaparecen si el sistema deja de tener banco.
+  S.quoteItems.filter(it=>(it.type==='bat'||it.type==='mppt')&&!autoTypes.has(it.type)).forEach(guardar);
   const extras=S.quoteItems.filter(it=>!autoTypes.has(it.type)&&it.type!=='bat'&&it.type!=='mppt');
   const out=want.map(w=>{
     const prev=S.quoteItems.find(it=>it.type===w.type);
-    if(!prev)return{...w,price:'',iva:ivaDeTipo(w.type),id:uid(),auto:true};
-    // Preservar lo que cargó el usuario; actualizar lo que depende del diseño.
-    const comp=prev._edited?prev.comp:w.comp;
-    // Si el diseño cambió el componente, el producto de lista asociado ya no
-    // corresponde: el pedido saldría con el código de otro equipo.
-    const match=comp===prev.comp?prev._autoMatched:undefined;
-    return{...prev,type:w.type,qty:w.qty,comp,_autoMatched:match,auto:true};
+    if(!prev)return conPrecio({...w,price:'',iva:ivaDeTipo(w.type),id:uid(),auto:true,_diseno:w.comp},
+      vistos[w.type+'|'+w.comp]);
+    // _diseno: qué equipo pedía el diseño cuando se cargó el precio. Los ítems
+    // guardados antes de que existiera este campo toman su descripción.
+    const antes=prev._diseno||(prev._edited?w.comp:prev.comp);
+    if(antes!==w.comp){
+      // El diseño cambió de equipo (otro inversor, otra batería, otro panel):
+      // el precio, el producto de lista y el nombre eran del anterior.
+      // Conservarlos cotizaba —y pedía a EcoApo— un equipo al precio de otro.
+      guardar({...prev,_diseno:antes});
+      const v=vistos[w.type+'|'+w.comp];
+      const teniaPrecio=parseFloat(prev.price)>0;
+      return conPrecio({...prev,type:w.type,qty:w.qty,comp:w.comp,price:'',_autoMatched:undefined,
+        _edited:false,_diseno:w.comp,_reset:teniaPrecio&&!v?antes:undefined,auto:true},v);
+    }
+    // Mismo equipo: se conserva lo que cargó el usuario y se actualiza la cantidad.
+    return{...prev,type:w.type,qty:w.qty,comp:prev._edited?prev.comp:w.comp,_diseno:w.comp,auto:true};
   });
   S.quoteItems=out.concat(extras);
 }
@@ -2483,6 +2534,7 @@ function qPrice(inp){
   const id=parseInt(inp.dataset.qid);
   const it=S.quoteItems.find(x=>x.id===id);if(!it)return;
   it.price=inp.value;
+  if(it._reset&&parseFloat(it.price)>0){it._reset=undefined;const n=$('rs-'+id);if(n)n.remove();}
   qRowCells(id);qUpdateTotals();
 }
 function tcChange(inp){
@@ -2761,8 +2813,9 @@ function s8(){
   const T=quoteTotals();   // mismo cálculo que el Paso 7 y el PDF
   const tot=T.grand;
   const LC=lineasCliente();  // precios de venta: el cliente no ve costos
+  const I=S.instalador,iNom=(I.nombre||'').trim(),iCto=instContacto();
   const propText=`PROPUESTA TÉCNICA PRELIMINAR
-ECOAPO · Energía Solar Fotovoltaica
+${iNom||'ECOAPO'} · Energía Solar Fotovoltaica
 Fecha: ${now}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -2772,7 +2825,7 @@ Cliente:        ${S.project.name||'—'}
 Ubicación:      ${loc}
 Tipo:           ${tipo}
 Sistema:        ${sys}
-Distribuidor:   ECOAPO
+${iNom?'Presupuestó:    '+iNom+'\n':''}${iCto?'Contacto:       '+iCto+'\n':''}${I.matricula&&I.matricula.trim()?'Matrícula:      '+I.matricula.trim()+'\n':''}Distribuidor:   ECOAPO
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 CONSUMO ESTIMADO
@@ -2837,8 +2890,8 @@ ${(()=>{const m=paramsModificados();return m.length?'\n━━━━━━━━�
   m.map(k=>'• '+PARAMS_INFO[k][0]+': '+S.params[k]+'  (referencia: '+PARAMS_DEF[k]+')').join('\n')+
   '\nAjustados por el técnico responsable del presupuesto.\n':'';})()}
 
-ECOAPO · ecoapo.org
-Energía Solar Fotovoltaica · Argentina 2025`;
+${iNom?iNom+(iCto?'\n'+iCto:'')+'\n\n':''}Equipos distribuidos por ECOAPO · ecoapo.org
+Energía Solar Fotovoltaica · Argentina ${new Date().getFullYear()}`;
   // Sólo pisar el texto si el usuario no lo editó a mano.
   if(!S.proposalEdited)S.proposal=propText;
   const shown=S.proposalEdited?S.proposal:propText;
@@ -2866,6 +2919,7 @@ ${tip('¿Cómo presentar una propuesta profesional?',
     </div>
   </div>
   ${S.proposalEdited?'<div class="section-note" style="margin-bottom:6px">&#9998; Texto editado a mano: ya no se actualiza solo con los cambios de dise&ntilde;o.</div>':''}
+  ${avisosPresupuesto()}
   ${propuestaConCostos()?'<div class="alert-warn" style="margin-bottom:8px">&#9888; Este texto se edit&oacute; con una versi&oacute;n anterior y <b>muestra tus costos y tu markup</b>. Regeneralo antes de entregarlo al cliente.</div>':''}
   <div class="proposal-preview" id="proposal-text">${escHtml(shown)}</div>
 </div>`;
@@ -2874,6 +2928,16 @@ ${tip('¿Cómo presentar una propuesta profesional?',
 // texto editado a mano con esa versión quedó guardado así en el navegador.
 function propuestaConCostos(){
   return !!(S.proposalEdited&&S.proposal&&/Materiales \(neto\)|Markup +\d/.test(S.proposal));
+}
+// Lo que conviene resolver antes de entregarle el presupuesto al cliente.
+function avisosPresupuesto(){
+  const out=[];
+  if(!(S.instalador.nombre||'').trim())out.push('Tu nombre y tu contacto no van a figurar en el presupuesto. '+
+    '<a href="#" onclick="event.preventDefault();goTo(1)" style="color:inherit;font-weight:700">Cargalos en el Paso 1</a>.');
+  const sp=itemsSinPrecio();
+  if(sp.length)out.push('Sin precio, y por eso fuera del presupuesto al cliente: <b>'+sp.map(escHtml).join(', ')+'</b>. '+
+    '<a href="#" onclick="event.preventDefault();goTo(7)" style="color:inherit;font-weight:700">Completalos en el Paso 7</a> o borralos.');
+  return out.map(t=>'<div class="alert-warn" style="margin-bottom:8px">&#9888; '+t+'</div>').join('');
 }
 function copiarTexto(txt,msg){
   navigator.clipboard.writeText(txt).then(()=>alert(msg)).catch(()=>{
@@ -2909,6 +2973,7 @@ function s9(){
   <div class="step-title">&#127942; Presupuesto y pedido</div>
   <div class="step-sub">Dos documentos distintos: el presupuesto para tu cliente y el pedido de materiales a EcoApo.</div>
 </div>
+${avisosPresupuesto()}
 <div class="card" style="text-align:center;padding:28px">
   <div style="font-size:48px;margin-bottom:12px">&#128203;</div>
   <div style="font-size:16px;font-weight:700;color:var(--g1);margin-bottom:6px">
@@ -2965,7 +3030,7 @@ function s9(){
 
 // ── PDF EXPORT ─────────────────────────────────────────────────────────────
 const PDF_C={G1:[26,66,32],G2:[140,198,63],G3:[238,247,228],GR:[80,80,80]};
-function pdfCabecera(doc,titulo){
+function pdfCabecera(doc,titulo,sub){
   const{G1,G2}=PDF_C,PW=210,ML=14;
   const now=new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
   doc.setFillColor(...G1);doc.rect(0,0,PW,26,'F');
@@ -2975,7 +3040,7 @@ function pdfCabecera(doc,titulo){
   doc.setTextColor(255,255,255);doc.setFontSize(14);
   doc.text(titulo,ML+22,12);
   doc.setFont('helvetica','normal');doc.setFontSize(8);
-  doc.text('ECOAPO \u00b7 Simulador Solar Fotovoltaico \u00b7 '+now,ML+22,18);
+  doc.text((sub||'ECOAPO \u00b7 Simulador Solar Fotovoltaico')+' \u00b7 '+now,ML+22,18);
   return 32;
 }
 function pdfPie(doc,leyenda){
@@ -2992,6 +3057,11 @@ function pdfPie(doc,leyenda){
 }
 function exportPDF(){
   if(!window.jspdf){alert('Librer\u00eda PDF cargando\u2026 intent\u00e1 en unos segundos.');return;}
+  const faltan=[];
+  if(!(S.instalador.nombre||'').trim())faltan.push('- Tu nombre y contacto (Paso 1)');
+  const sp=itemsSinPrecio();
+  if(sp.length)faltan.push('- Precio de: '+sp.join(', ')+' (Paso 7). Sin precio no entran en el total.');
+  if(faltan.length&&!confirm('Al presupuesto le falta:\n\n'+faltan.join('\n')+'\n\n\u00bfDescargar igual?'))return;
   if(propuestaConCostos()&&!confirm('La propuesta editada a mano muestra tus costos y tu markup.\n\n'+
     'Regenerala en el Paso 8 antes de entregarla. \u00bfDescargar igual?'))return;
   const{jsPDF}=window.jspdf;
@@ -2999,7 +3069,21 @@ function exportPDF(){
   const PW=210,PH=297,ML=14,MR=14,CW=PW-ML-MR;
   const{G1,G2,G3,GR}=PDF_C;
   const R=S.results;
-  let y=pdfCabecera(doc,'Propuesta Solar Fotovoltaica');
+  const I=S.instalador,iNom=(I.nombre||'').trim();
+  let y=pdfCabecera(doc,'Propuesta Solar Fotovoltaica',iNom?'Presupuesto de '+iNom:'');
+  // Quién presupuesta: el cliente tiene que saber a quién llamar.
+  if(iNom){
+    doc.setFillColor(255,255,255);doc.setDrawColor(...G1);doc.setLineWidth(0.4);
+    doc.rect(ML,y,CW,15);
+    doc.setFont('helvetica','bold');doc.setFontSize(7);doc.setTextColor(...G1);
+    doc.text('PRESUPUESTADO POR',ML+4,y+5);
+    doc.setFontSize(10);
+    doc.text(iNom+(I.matricula&&I.matricula.trim()?'  \u00b7  Mat. '+I.matricula.trim():''),ML+4,y+11);
+    doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(...GR);
+    const cto=instContacto();
+    if(cto)doc.text(cto,PW-MR-4,y+11,{align:'right'});
+    y+=19;
+  }
   // Client block
   doc.setFillColor(...G3);doc.rect(ML,y,CW,18,'F');
   doc.setDrawColor(...G2);doc.setLineWidth(0.4);doc.rect(ML,y,CW,18);
@@ -3146,8 +3230,11 @@ function textoPedido(){
   const lin=PE.lineas.map(l=>l.qty+' \u00d7 '+l.comp+
     (l.prod?'\n    Lista: '+l.prod:'')+
     '\n    '+(l.unit>0?'USD '+m2(l.unit)+' c/u \u00b7 IVA '+alicTxt(l.iva)+' \u00b7 USD '+m2(l.sub):'a cotizar')).join('\n');
+  const I=S.instalador,iNom=(I.nombre||'').trim(),iCto=instContacto();
   return 'PEDIDO DE MATERIALES \u2014 ECOAPO\n'+
     'Fecha:    '+now+'\n'+
+    (iNom?'Pide:     '+iNom+(I.matricula&&I.matricula.trim()?' (Mat. '+I.matricula.trim()+')':'')+'\n':'')+
+    (iCto?'Contacto: '+iCto+'\n':'')+
     'Sistema:  '+resumenSistema(S.results)+'\n\n'+
     lin+'\n\n'+
     'Neto:          USD '+m2(PE.net)+'\n'+
@@ -3165,8 +3252,17 @@ function exportPedido(){
   const doc=new jsPDF({format:'a4',unit:'mm'});
   const ML=14,MR=14,CW=210-ML-MR;
   const{G1,GR}=PDF_C;
-  let y=pdfCabecera(doc,'Pedido de materiales');
+  const I=S.instalador,iNom=(I.nombre||'').trim();
+  let y=pdfCabecera(doc,'Pedido de materiales',iNom?'Pide '+iNom:'');
   doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(...GR);
+  if(iNom){
+    doc.setFont('helvetica','bold');doc.setTextColor(...G1);
+    doc.text('Instalador: '+iNom+(I.matricula&&I.matricula.trim()?' (Mat. '+I.matricula.trim()+')':''),ML,y);
+    doc.setFont('helvetica','normal');doc.setTextColor(...GR);
+    const cto=instContacto();
+    if(cto)doc.text(cto,210-MR,y,{align:'right'});
+    y+=5.5;
+  }
   doc.text('Sistema: '+resumenSistema(S.results),ML,y);y+=6;
   const rows=PE.lineas.map(l=>[
     l.comp+(l.prod?'\nLista: '+l.prod:''),
@@ -3269,7 +3365,8 @@ const LS_KEY='ecoapo-sim-v1';
 let saveT=null;
 function saveState(){
   try{
-    const {results,...rest}=S;   // results se recalcula solo, no se guarda
+    // results se recalcula solo; instalador tiene su propia clave (LS_INST).
+    const {results,instalador,...rest}=S;
     localStorage.setItem(LS_KEY,JSON.stringify({v:1,S:rest,CUR,iid}));
   }catch(e){/* navegación privada o storage lleno: se sigue sin persistir */}
 }
@@ -3287,6 +3384,24 @@ function loadState(){
     iid=parseInt(d.iid)||0;
     return true;
   }catch(e){return false;}
+}
+// Los datos del instalador son suyos, no del proyecto: se guardan en otra
+// clave para que «Nuevo proyecto» no le obligue a cargarlos otra vez.
+const LS_INST='ecoapo-instalador-v1';
+function instChange(k,v){
+  S.instalador[k]=v;
+  try{localStorage.setItem(LS_INST,JSON.stringify(S.instalador));}catch(e){}
+}
+function loadInstalador(){
+  try{
+    const d=JSON.parse(localStorage.getItem(LS_INST)||'null');
+    if(d&&typeof d==='object')
+      ['nombre','matricula','tel','email'].forEach(k=>{if(typeof d[k]==='string')S.instalador[k]=d[k];});
+  }catch(e){}
+}
+function instContacto(){
+  const I=S.instalador;
+  return [I.tel&&'Tel. '+I.tel.trim(),I.email&&I.email.trim()].filter(Boolean).join(' \u00b7 ');
 }
 function resetAll(){
   if(!confirm('\u00bfEmpezar un proyecto nuevo?\n\nSe borran todos los datos cargados.'))return;
@@ -3349,6 +3464,7 @@ function scormComplete(){
     const el_=$('scorm-time');if(el_)el_.textContent=fmt(el);
   },1000);
   const restaurado=loadState();
+  loadInstalador();
   if(!restaurado)S.items=[];
   renderMain();
   renderStepper();
